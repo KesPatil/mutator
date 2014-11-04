@@ -3,6 +3,7 @@ from modeller.automodel import *
 from Bio import PDB as pdb
 import re
 import csv
+import shutil
 
 """
 This program fills in missing residues from (correctly formatted) pdb files.
@@ -19,18 +20,20 @@ Known issues:
 To do:
     fix issues with knots!
     modify way it reads in sequence so that models are automatically given
-        the correct name including active/inactive designation (check)
+        the correct name including active/inactive designation (DONE)
     put in loop to automatically put in regions to modify (now hard coded)
+        (CURRENTLY WORKING ON THIS)
     put it in a loop so that it reads the active/inactive templates and then
-        create models in a separate directory
+        create models in a separate directory (DONE)
     put in a sanity check to make sure there are no mutations in the pdb 
         structures (we know there are some) and use modeller to mutate
         these back 
+        (ASK JOE ABOUT THIS)
     maybe put in a sanity check at the end that compares models of similar
         sequence or structure
 """
 
-datafile = open('./actives/structures.csv', 'r') #Opens the structures file
+datafile = open('./structures.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -58,7 +61,7 @@ for i in range(len(pdb_info)):
     complete = pdb_info[i].complete #saves yes or no for complete
     structure_conf = pdb_info[i].conformation #saves active or inactive for conformation
     print pdb_name
-    pdb_file = './actives/PDBs/'+pdb_name+'.pdb'
+    pdb_file = './PDBs/'+pdb_name+'.pdb'
     fp = open(pdb_file)
     parser = pdb.PDBParser()
     struct = parser.get_structure("name",pdb_file) #read in pdb file using PDBParser
@@ -73,7 +76,7 @@ for i in range(len(pdb_info)):
         if(diff>0): #put in dashes for missing residues
             structure_sequence += diff*'-'
         last = search.groups()[1]
-        structure_sequence+=seq.get_sequence()
+        structure_sequence += seq.get_sequence()
         #print (int(first)-21),(int(last)-21)
 
     #put in newlines into structure_sequence for proper PIR format
@@ -110,7 +113,7 @@ for i in range(len(pdb_info)):
     env = environ()
 
     #where to look for pdb files
-    env.io.atom_files_directory = ['.', './actives/PDBs']
+    env.io.atom_files_directory = ['.', './PDBs']
 
     # Create a new class based on 'loopmodel' so that we can redefine
     # select_loop_atoms
@@ -121,14 +124,24 @@ for i in range(len(pdb_info)):
                              self.residue_range('166:', '175:'),
                              self.residue_range('217:', '222:'))
 
+            # index of the last model         
     a = MyLoop(env,
-               alnfile  = 'active.ali',      # alignment filename
-               knowns   = pdb_name,               # codes of the templates
-               sequence = protein_name,               # code of the target
-               library_schedule = autosched.slow,
-               deviation = 1,
-               assess_methods = assess.DOPE) # assess each loop with DOPE
+            alnfile  = 'active.ali',      # alignment filename
+            knowns   = pdb_name,               # codes of the templates
+            sequence = protein_name,               # code of the target
+            library_schedule = autosched.slow,
+            deviation = 1,
+            assess_methods = assess.DOPE) # assess each loop with DOPE
     a.starting_model = 1                 # index of the first model
-    a.ending_model  = 1                 # index of the last model
-
-    a.make()                            # do modeling and loop refinement
+    a.ending_model  = 1 
+    a.make() #do modeling and loop refinement
+    if re.match("active", structure_conf) is not None:
+        if re.match("yes", complete) is not None:
+            shutil.move(protein_name+'.B99990001.pdb', './actives/complete') #where is this PDB file generated in this code?  IMPORTANT TO FIGURE OUT
+        if re.match("no", complete) is not None:
+            shutil.move(protein_name+'.B99990001.pdb', './actives/incomplete') 
+    if re.match("inactive", structure_conf) is not None: #if statement to facilitate change of directory if structure is active; check regex
+        if re.match("yes", complete) is not None:
+            shutil.move(protein_name+'.B99990001.pdb', './inactives/complete') #where is this PDB file generated in this code?  IMPORTANT TO FIGURE OUT
+        if re.match("no", complete) is not None:
+            shutil.move(protein_name+'.B99990001.pdb', './inactives/incomplete') 

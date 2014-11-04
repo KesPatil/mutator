@@ -1,0 +1,42 @@
+CDK8 & 4F7S-A & \\
+PRKAA2 & 4CFF-A & \\
+ABL1 & 2HZI-A & \\
+ABL2 & 3HMI-A & \\
+ACVRL1 & 3MY0-N & \\
+AKT1 & 3CQU-A & pT308 \\
+AKT2 & 1O6L-A & pT309 \\
+ADRBK1 & 3V5W-A & \\
+AURKA & 4C3P-A & \\
+ACVR2A & 3SOC-A & \\
+ACVR2B & 2QLU-A & \\
+CDK12 & 4CXA-C & pT893 \\
+CDK2 & 2JGZ-A & \\
+CDK5 & 1LFR-A & \\
+CDK9 & 1PF6-A & \\
+CHEK1 & 2E9N-A & \\
+CLK2 & 3NR9-B & \\
+CSNK2A1 & 3Q04-A & \\
+CSNK2A2 & 3E3B-X & \\
+CASK & 3C0H-B & \\
+DAPK1 & 4PF4-A & \\
+DAPK2 & 2A2A-B & \\
+DAPK3 & 1YRP-B & pT265 \\
+DYRK1A & 4MQ1-A & pY321 \\
+EGFR & 2ITW-A & \\
+GRK6 & 2ACX-A & \\
+GSK3B & 4ACG-B & \\
+IRAK4 & 2NRU-A & pT345 pS346 \\
+JAK2-JH2 & 3E62-A & \\
+PRKACA & 2GU8-A & \\
+CSNK1D & 4HNF-B & \\
+CSNK1E & 4HOK-M & \\
+CSNK1G3 & 4G17-A & \\
+CAMK2A & 2VZ6-B & \\
+CAMK2D & 2VN9-A & \\
+PRKCA & 3IW4-A & \\
+PRKCB & 2I0E-A & pT500 \\
+PRKCQ & 1XJD-A & pT538 \\
+RPS6KA3 & 4D9T-A & \\
+SYK & 4GFG-A & \\
+LCK & 2OF2-A & \\
+MAP3K14 & 4IDV-A & \\
