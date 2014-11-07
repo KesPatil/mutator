@@ -20,15 +20,16 @@ Known issues:
 To do:
     fix issues with knots!
     modify way it reads in sequence so that models are automatically given
-        the correct name including active/inactive designation (DONE)
+        the correct name including active/inactive designation *** (DONE) ***
     put in loop to automatically put in regions to modify (now hard coded)
-        (CURRENTLY WORKING ON THIS)
+        *** (CURRENTLY WORKING ON THIS) ***
     put it in a loop so that it reads the active/inactive templates and then
-        create models in a separate directory (DONE)
+        create models in a separate directory *** (DONE) ***
+        *** figure out a way to move all files starting with protein_name ***
     put in a sanity check to make sure there are no mutations in the pdb 
         structures (we know there are some) and use modeller to mutate
         these back 
-        (ASK JOE ABOUT THIS)
+        *** can make another column in CSV that denotes mutations ***
     maybe put in a sanity check at the end that compares models of similar
         sequence or structure
 """
@@ -68,9 +69,13 @@ for i in range(len(pdb_info)):
     ppb = pdb.PPBuilder() #peptide class to get sequence
     last = 100000 #make sure first iter through loop has no dashes -
     structure_sequence = ''
+    first_range = []
+    last_range = []
     for seq in ppb.build_peptides(struct):
         #use this re to get the chain breaks
-        search = re.search('start=([0-9]{1,4}).+end=([0-9]{1,4})',"{0}".format(seq))
+        search = re.search('start=([0-9]{1,5}).+end=([0-9]{1,5})',"{0}".format(seq))
+        first_range.append(search.groups()[0])
+        last_range.append(search.groups()[1])
         first = search.groups()[0]
         diff = int(first)-int(last)
         if(diff>0): #put in dashes for missing residues
@@ -87,9 +92,12 @@ for i in range(len(pdb_info)):
     full_sequence = ''
     lines = fp.readlines()
     first = lines[0]
-    header = re.split('HEADER\W+',first)[1]
+    header = re.split('HEADER\W+',first)[1] #uses a modified version of PDB file
+    #print header
+
+    
     for index in range(1,10):
-        split_line = re.split('REMARK 300 ',lines[index])
+        split_line = re.split('REMARK 300 ',lines[index]) #appears that changing remark to 465 lowers the number of atoms
         if split_line[0] == '':
             full_sequence += split_line[1]
 
@@ -107,8 +115,14 @@ for i in range(len(pdb_info)):
     PIR.write("{0}*\n\n".format(full_sequence.strip()))
     PIR.close()
 
-
+    first_range = map(int, first_range) #makes this an integer array
+    last_range = map(int, last_range) #makes this an integer array
+    first_range.pop(0) #gets rid of the first element
+    last_range.pop(-1) #gets rid of the last element
+    first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
+    last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
     #begin modeller stuff here
+
     log.verbose()
     env = environ()
 
@@ -117,14 +131,17 @@ for i in range(len(pdb_info)):
 
     # Create a new class based on 'loopmodel' so that we can redefine
     # select_loop_atoms
+
+
     class MyLoop(automodel):
         # This routine picks the residues to be refined by loop modeling
         def select_loop_atoms(self): #need to fix this
-            return selection(self.residue_range('95:', '101:'),
-                             self.residue_range('166:', '175:'),
-                             self.residue_range('217:', '222:'))
-
+            if not first_missing:
+                return
+            else:
+                return selection(self.residue_range(first_missing + ':', last_missing + ':'))
             # index of the last model         
+    
     a = MyLoop(env,
             alnfile  = 'active.ali',      # alignment filename
             knowns   = pdb_name,               # codes of the templates
@@ -135,6 +152,8 @@ for i in range(len(pdb_info)):
     a.starting_model = 1                 # index of the first model
     a.ending_model  = 1 
     a.make() #do modeling and loop refinement
+    
+    # FIND A WAY TO MOVE ALL FILES STARTING WITH protein_name TO THE GIVEN DIRECTORY!
     if re.match("active", structure_conf) is not None:
         if re.match("yes", complete) is not None:
             shutil.move(protein_name+'.B99990001.pdb', './actives/complete') #where is this PDB file generated in this code?  IMPORTANT TO FIGURE OUT

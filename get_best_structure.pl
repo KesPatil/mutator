@@ -6,7 +6,7 @@ use File::Slurp;
 use LWP::Simple;
 use List::Util qw(min);
 
-my $all_uniprots=read_file('../uniprot/all_uniprot.txt');
+my $all_uniprots=read_file('./uniprot/all_uniprot.txt');
 my @all_uniprots=split("//\n",$all_uniprots);
 my @proteins;
 my @domains=("Protein kinase");
