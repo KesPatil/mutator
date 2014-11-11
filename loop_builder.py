@@ -1,3 +1,4 @@
+#!/usr/bin/env 
 from modeller import *
 from modeller.automodel import *
 from Bio import PDB as pdb
@@ -19,10 +20,13 @@ Known issues:
 
 To do:
     fix issues with knots!
+        *** Trying to play with energetics here ***
+        *** It does not appear that adding flanking residues to automodel helps ***
     modify way it reads in sequence so that models are automatically given
         the correct name including active/inactive designation *** (DONE) ***
     put in loop to automatically put in regions to modify (now hard coded)
-        *** (CURRENTLY WORKING ON THIS) ***
+        *** issue: can't ignore the first residue in the range or the last residue in the range ***
+        *** this is because missing residues might be flanking ***
     put it in a loop so that it reads the active/inactive templates and then
         create models in a separate directory *** (DONE) ***
         *** figure out a way to move all files starting with protein_name ***
@@ -77,13 +81,12 @@ for i in range(len(pdb_info)):
         first_range.append(search.groups()[0])
         last_range.append(search.groups()[1])
         first = search.groups()[0]
-        diff = int(first)-int(last)
-        if(diff>0): #put in dashes for missing residues
+        diff = int(first)-int(last)-1
+        if(diff > 0): #put in dashes for missing residues
             structure_sequence += diff*'-'
-        last = search.groups()[1]
+        last = search.groups()[1] 
         structure_sequence += seq.get_sequence()
         #print (int(first)-21),(int(last)-21)
-
     #put in newlines into structure_sequence for proper PIR format
     for i in range(0,len(structure_sequence),70):
         structure_sequence = structure_sequence[:i] + "\n" + structure_sequence[i:]
@@ -93,7 +96,9 @@ for i in range(len(pdb_info)):
     lines = fp.readlines()
     first = lines[0]
     header = re.split('HEADER\W+',first)[1] #uses a modified version of PDB file
-    #print header
+    header_list = header.split(':')
+    first_res = int(header_list[1])
+    last_res = int(header_list[3])
 
     
     for index in range(1,10):
@@ -103,7 +108,7 @@ for i in range(len(pdb_info)):
 
 
     #write the alignment file
-
+    
     pdb_code = (pdb_name.split("-"[0])) 
     name = pdb_code[0] #changed this from hard coded 4F7S; it does not seem like this variable is used anywhere else
     PIR = open('active.ali','w')
@@ -115,30 +120,49 @@ for i in range(len(pdb_info)):
     PIR.write("{0}*\n\n".format(full_sequence.strip()))
     PIR.close()
 
-    first_range = map(int, first_range) #makes this an integer array
-    last_range = map(int, last_range) #makes this an integer array
-    first_range.pop(0) #gets rid of the first element
-    last_range.pop(-1) #gets rid of the last element
-    first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
-    last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
+
     #begin modeller stuff here
 
     log.verbose()
-    env = environ()
-
     #where to look for pdb files
+    
+    env = environ()
     env.io.atom_files_directory = ['.', './PDBs']
+    first_range = map(int, first_range) #makes this an integer array
+    last_range = map(int, last_range) #makes this an integer array
+    first_res_in_range = first_range.pop(0) #gets rid of the first element
+    last_res_in_range = last_range.pop(-1) #gets rid of the last element
+    first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
+    last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
 
+    
     # Create a new class based on 'loopmodel' so that we can redefine
     # select_loop_atoms
-
-
     class MyLoop(automodel):
         # This routine picks the residues to be refined by loop modeling
         def select_loop_atoms(self): #need to fix this
-            if not first_missing:
-                return
-            else:
+            #####make this easier to read by just doing if first case, add, if last case, add, etc.
+            if last_res_in_range != last_res and first_res_in_range == first_res:
+                if not first_missing:
+                    return selection(self.residue_range(last_res_in_range + ':', last_res + ':'))
+                else: 
+                    return selection(self.residue_range(first_missing + ':', last_missing + ':'),
+                                     self.residue_range(last_res_in_range + ':', last_res + ':'))
+            if first_res_in_range != first_res and last_res_in_range == last_res:
+                if not last_missing:
+                    return selection(self.residue_range(first_res + ':', first_res_in_range + ':'))
+                else: 
+                    return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
+                                     self.residue_range(first_missing + ':', last_missing + ':'))
+            if first_res_in_range != first_res and last_res_in_range != last_res:
+                if not first_missing: # can use first_missing because if first_missing is empty, so is last_missing
+                    return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
+                                     self.residue_range(last_res_in_range + ':', last_res + ':'))
+                else:
+                    return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
+                                     self.residue_range(first_missing + ':', last_missing + ':'),
+                                     self.residue_range(last_res_in_range + ':', last_res + ':'))
+            else: #if first_res_in_range == first_res and last_res_in_range == last_res:
                 return selection(self.residue_range(first_missing + ':', last_missing + ':'))
             # index of the last model         
     
@@ -157,10 +181,14 @@ for i in range(len(pdb_info)):
     if re.match("active", structure_conf) is not None:
         if re.match("yes", complete) is not None:
             shutil.move(protein_name+'.B99990001.pdb', './actives/complete') #where is this PDB file generated in this code?  IMPORTANT TO FIGURE OUT
+            shutil.move(protein_name+'.D00000001.pdb', './actives/complete')
         if re.match("no", complete) is not None:
             shutil.move(protein_name+'.B99990001.pdb', './actives/incomplete') 
+            shutil.move(protein_name+'.D00000001.pdb', './actives/incomplete')
     if re.match("inactive", structure_conf) is not None: #if statement to facilitate change of directory if structure is active; check regex
         if re.match("yes", complete) is not None:
             shutil.move(protein_name+'.B99990001.pdb', './inactives/complete') #where is this PDB file generated in this code?  IMPORTANT TO FIGURE OUT
+            shutil.move(protein_name+'.D00000001.pdb', './inactives/complete')
         if re.match("no", complete) is not None:
-            shutil.move(protein_name+'.B99990001.pdb', './inactives/incomplete') 
+            shutil.move(protein_name+'.B99990001.pdb', './inactives/incomplete')
+            shutil.move(protein_name+'.D00000001.pdb', './inactives/incomplete')
