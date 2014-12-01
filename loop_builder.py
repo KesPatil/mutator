@@ -21,7 +21,8 @@ I do not have the practical knowlede to make it do exactly what I want.
 
 Known issues: 
     the paths are hard coded, you will need to modify them
-    some structures hang up due to problems with modeller
+    tested 3CQU-A and 3O96-A, got RMSD of 1.5 -- not as good as could be
+    when the first residue is missing, it can't write the alignment file
 
 To do:
     fix issues with knots!
@@ -81,7 +82,6 @@ for i in range(1, len(pdb_info)):
         missing = open('missing_PDBs.csv','a')
         missing.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
     else:
-                      
         fp = open(pdb_file)
         parser = pdb.PDBParser()
         struct = parser.get_structure("name",pdb_file) #read in pdb file using PDBParser
@@ -91,21 +91,7 @@ for i in range(1, len(pdb_info)):
         first_range = []
         last_range = []
         for seq in ppb.build_peptides(struct):
-            #use this re to get the chain breaks
-            search = re.search('start=([0-9]{1,5}).+end=([0-9]{1,5})',"{0}".format(seq))
-            first_range.append(search.groups()[0])
-            last_range.append(search.groups()[1])
-            first = search.groups()[0]
-            diff = int(first)-int(last)-1
-            if(diff > 0): #put in dashes for missing residues
-                structure_sequence += diff*'-'
-            last = search.groups()[1] 
-            structure_sequence += seq.get_sequence()
-            #print (int(first)-21),(int(last)-21)
-        #put in newlines into structure_sequence for proper PIR format
-        for i in range(0,len(structure_sequence),70):
-            structure_sequence = structure_sequence[:i] + "\n" + structure_sequence[i:]
-
+            print seq.get_sequence()
         #read in the full sequence from the pdb file
         full_sequence = ''
         lines = fp.readlines()
@@ -115,6 +101,40 @@ for i in range(1, len(pdb_info)):
         first_res = int(header_list[1])
         last_res = int(header_list[3])
 
+        for seq in ppb.build_peptides(struct):
+            #use this re to get the chain breaks
+            search = re.search('start=([0-9]{1,5}).+end=([0-9]{1,5})',"{0}".format(seq))
+            first_range.append(search.groups()[0])
+            last_range.append(search.groups()[1])
+            first = search.groups()[0]
+            diff = int(first)-int(last)-1
+            if(diff > 0): #put in dashes for missing residues
+                structure_sequence += diff*'-'
+            last = search.groups()[1]
+            structure_sequence += seq.get_sequence()
+
+            #print (int(first)-21),(int(last)-21)
+        print structure_sequence
+
+        first_range = map(int, first_range) #makes this an integer array
+        last_range = map(int, last_range) #makes this an integer array
+        first_res_in_range = first_range.pop(0) #gets rid of the first element
+        last_res_in_range = last_range.pop(-1) #gets rid of the last element
+        first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
+        last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
+        
+        if first_res != first_res_in_range:
+            diff = first_res_in_range - first_res
+            if (diff > 0):
+                structure_sequence = diff*'-' + structure_sequence
+        if last_res != last_res_in_range:
+            diff = last_res - last_res_in_range
+            if (diff > 0):
+                structure_sequence = structure_sequence + diff*'-'
+
+        #put in newlines into structure_sequence for proper PIR format
+        for i in range(0,len(structure_sequence),70):
+            structure_sequence = structure_sequence[:i] + "\n" + structure_sequence[i:]
         
         for index in range(1,10):
             split_line = re.split('REMARK 300 ',lines[index]) #appears that changing remark to 465 lowers the number of atoms
@@ -136,7 +156,7 @@ for i in range(1, len(pdb_info)):
         PIR.write("{0}*\n\n".format(full_sequence.strip()))
         PIR.close()
 
-
+        
         #begin modeller stuff here
 
         log.verbose()
@@ -144,12 +164,6 @@ for i in range(1, len(pdb_info)):
         
         env = environ()
         env.io.atom_files_directory = ['.', './PDBs']
-        first_range = map(int, first_range) #makes this an integer array
-        last_range = map(int, last_range) #makes this an integer array
-        first_res_in_range = first_range.pop(0) #gets rid of the first element
-        last_res_in_range = last_range.pop(-1) #gets rid of the last element
-        first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
-        last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
 
         
         # Create a new class based on 'loopmodel' so that we can redefine
@@ -386,4 +400,4 @@ for i in range(1, len(pdb_info)):
                     bad_mutation = open('bad_mutation_PDBs.csv','a')
                     bad_mutation.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
                     bad_mutation.close()
-            
+        
