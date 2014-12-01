@@ -6,6 +6,8 @@ from Bio import PDB as pdb
 import re
 import csv
 import os, glob
+import gromacs
+import subprocess
 
 
 """
@@ -19,10 +21,10 @@ I do not have the practical knowlede to make it do exactly what I want.
 
 Known issues: 
     the paths are hard coded, you will need to modify them
+    some structures hang up due to problems with modeller
+    If statements pertaining to first_res and first_res_in_range might be messed up 
 
 To do:
-    new issue: the PDB file made from Modeller changes the residue numbers
-        *** leads: check out the a.make function ***
     fix issues with knots!
         *** (DONE) ***
         *** Solution: make sure the dashes in the "active.ali" file are of
@@ -47,8 +49,7 @@ To do:
     sanity check to make sure that it is actually complete or incomplete
 """
 
-datafile = open('./temp.csv', 'r') #Opens the structures file for reading
-
+datafile = open('./structures2.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -65,7 +66,6 @@ class PDB_info(object):
         self.conformation = row[3] #active or inactive?
         self.mutation = row[4] #is there a mutation?  If so, what are the details?
 
-
 pdb_info = [PDB_info(item) for item in data]
 
 #print pdb_info[0].id
@@ -76,26 +76,12 @@ for i in range(1, len(pdb_info)):
     complete = pdb_info[i].complete #saves yes or no for complete
     structure_conf = pdb_info[i].conformation #saves active or inactive for conformation
     mutation = pdb_info[i].mutation
-    
     print pdb_name
     pdb_file = './PDBs/'+pdb_name+'.pdb'
     if os.path.isfile(pdb_file) != True: #if there is no pdb_file, then make a note of it and continue with next pdb
         missing = open('missing_PDBs.csv','a')
         missing.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
     else:
-        if re.search('no_mutation', mutation) is not None:
-            print 'No mutations here'
-        else:
-            print "Looks like we've got a mutation.  Let's check it out. \n"
-            is_mutated = re.match(r"([a-z])([0-9]+)([a-z])", mutation, re.I)
-            if is_mutated:
-                mutations_list = is_mutated.groups()
-                res_position = mutations_list[1]
-                restyp = pdb.Polypeptide.one_to_three(mutations_list[2]) #get three letter code
-            else:
-                print 'Mutation of '+pdb_name+' not recognized. Going to take note of this.'
-                bad_mutation = open('bad_mutation_PDBs.csv','a')
-                bad_mutation.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
                       
         fp = open(pdb_file)
         parser = pdb.PDBParser()
@@ -211,168 +197,194 @@ for i in range(1, len(pdb_info)):
         #move directory and change name based on active/inactive and incomplete/complete designation
         if re.match("active", structure_conf) is not None:
             if re.match("yes", complete) is not None:
-                os.rename(protein_name+'.B99990001.pdb', './actives/complete/'+protein_name+'_active') 
+                os.rename(protein_name+'.B99990001.pdb', './actives/complete/'+protein_name+'_active.pdb') 
                 os.rename(protein_name+'.D00000001', './actives/complete/'+protein_name+'_active_logFile')
-                modelname = './actives/complete/'+protein_name+'_active'
+                modelname = ('./actives/complete/'+protein_name+'_active.pdb')
+                briefname = ('./actives/complete/'+protein_name+'_active')
             else:
-                os.rename(protein_name+'.B99990001.pdb', './actives/incomplete/'+protein_name+'_active') 
+                os.rename(protein_name+'.B99990001.pdb', './actives/incomplete/'+protein_name+'_active.pdb') 
                 os.rename(protein_name+'.D00000001', './actives/incomplete/'+protein_name+'_active_logFile')
-                modelname = './actives/incomplete/'+protein_name+'_active'
+                modelname = ('./actives/incomplete/'+protein_name+'_active.pdb')
+                briefname = ('./actives/incomplete/'+protein_name+'_active')
         if re.match("inactive", structure_conf) is not None: 
             if re.match("yes", complete) is not None:
-                os.rename(protein_name+'.B99990001.pdb', './inactives/complete/'+protein_name+'_inactive') 
+                os.rename(protein_name+'.B99990001.pdb', './inactives/complete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/complete/'+protein_name+'_inactive_logFile')
-                modelname = './inactives/complete/'+protein_name+'_inactive'
+                modelname = ('./inactives/complete/'+protein_name+'_inactive.pdb')
+                briefname = ('./inactives/complete/'+protein_name+'_inactive')
             else:
-                os.rename(protein_name+'.B99990001.pdb', './inactives/incomplete/'+protein_name+'_inactive') 
+                os.rename(protein_name+'.B99990001.pdb', './inactives/incomplete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/incomplete/'+protein_name+'_inactive_logFile')
-                modelname = './inactives/incomplete/'+protein_name+'_inactive'
+                modelname = ('./inactives/incomplete/'+protein_name+'_inactive.pdb')
+                briefname = ('./inactives/incomplete/'+protein_name+'_inactive')
         for filename in glob.glob("./"+protein_name+"*"):
             os.remove(filename)
-        
+         
         #mutate_model.py
-        respos_calc = int(res_position) - first_res + 1
-        respos = str(respos_calc)
-        def optimize(atmsel, sched):
-            #conjugate gradient
-            for step in sched:
-                step.optimize(atmsel, max_iterations=200, min_atom_shift=0.001)
-            #md
-            refine(atmsel)
-            cg = conjugate_gradients()
-            cg.optimize(atmsel, max_iterations=200, min_atom_shift=0.001)
-
-
-        #molecular dynamics
-        def refine(atmsel):
-            # at T=1000, max_atom_shift for 4fs is cca 0.15 A.
-            md = molecular_dynamics(cap_atom_shift=0.39, md_time_step=4.0,
-                                    md_return='FINAL')
-            init_vel = True
-            for (its, equil, temps) in ((200, 20, (150.0, 250.0, 400.0, 700.0, 1000.0)),
-                                        (200, 600,
-                                         (1000.0, 800.0, 600.0, 500.0, 400.0, 300.0))):
-                for temp in temps:
-                    md.optimize(atmsel, init_velocities=init_vel, temperature=temp,
-                                 max_iterations=its, equilibrate=equil)
-                    init_vel = False
-
-
-        #use homologs and dihedral library for dihedral angle restraints
-        def make_restraints(mdl1, aln):
-           rsr = mdl1.restraints
-           rsr.clear()
-           s = selection(mdl1)
-           for typ in ('stereo', 'phi-psi_binormal'):
-               rsr.make(s, restraint_type=typ, aln=aln, spline_on_site=True)
-           for typ in ('omega', 'chi1', 'chi2', 'chi3', 'chi4'):
-               rsr.make(s, restraint_type=typ+'_dihedral', spline_range=4.0,
-                        spline_dx=0.3, spline_min_points = 5, aln=aln,
-                        spline_on_site=True)
-
-        #first argument
-
-        #figure out a way to get modelname from pdb
-        #use regex to split at the first number
-
-        log.verbose()
-
-        # Set a different value for rand_seed to get a different final model
-        env = environ(rand_seed=-49837)
-
-        env.io.hetatm = True
-        #soft sphere potential
-        env.edat.dynamic_sphere=False
-        #lennard-jones potential (more accurate)
-        env.edat.dynamic_lennard=True
-        env.edat.contact_shell = 4.0
-        env.edat.update_dynamic = 0.39
-
-        # Read customized topology file with phosphoserines (or standard one)
-        env.libs.topology.read(file='$(LIB)/top_heav.lib')
-
-        # Read customized CHARMM parameter library with phosphoserines (or standard one)
-        env.libs.parameters.read(file='$(LIB)/par.lib')
-
-
-        # Read the original PDB file and copy its sequence to the alignment array:
-        mdl1 = model(env, file=modelname)
-        ali = alignment(env)
-        ali.append_model(mdl1, atom_files=modelname, align_codes=modelname)
-
-        #set up the mutate residue selection segment
-        s = selection(mdl1.residues[respos])
-
-        #perform the mutate residue operation
-        s.mutate(residue_type=restyp)
-        #get two copies of the sequence.  A modeller trick to get things set up
-        ali.append_model(mdl1, align_codes=modelname)
-
-        # Generate molecular topology for mutant
-        mdl1.clear_topology()
-        mdl1.generate_topology(ali[-1])
-
-
-        # Transfer all the coordinates you can from the template native structure
-        # to the mutant (this works even if the order of atoms in the native PDB
-        # file is not standard):
-        #here we are generating the model by reading the template coordinates
-        mdl1.transfer_xyz(ali)
-
-        # Build the remaining unknown coordinates
-        mdl1.build(initialize_xyz=False, build_method='INTERNAL_COORDINATES')
-
-        #yes model2 is the same file as model1.  It's a modeller trick.
-        mdl2 = model(env, file=modelname)
-
-        #required to do a transfer_res_numb
-        #ali.append_model(mdl2, atom_files=modelname, align_codes=modelname)
-        #transfers from "model 2" to "model 1"
-        mdl1.res_num_from(mdl2,ali)
-
-        #It is usually necessary to write the mutated sequence out and read it in
-        #before proceeding, because not all sequence related information about MODEL
-        #is changed by this command (e.g., internal coordinates, charges, and atom
-        #types and radii are not updated).
-
-        mdl1.write(file=modelname+restyp+respos+'.tmp')
-        mdl1.read(file=modelname+restyp+respos+'.tmp')
-
-        #set up restraints before computing energy
-        #we do this a second time because the model has been written out and read in,
-        #clearing the previously set restraints
-        make_restraints(mdl1, ali)
-
-        #a non-bonded pair has to have at least as many selected atoms
-        mdl1.env.edat.nonbonded_sel_atoms=1
-
-        sched = autosched.loop.make_for_model(mdl1)
-
-        #only optimize the selected residue (in first pass, just atoms in selected
-        #residue, in second pass, include nonbonded neighboring atoms)
-        #set up the mutate residue selection segment
-        s = selection(mdl1.residues[respos])
-
-        mdl1.restraints.unpick_all()
-        mdl1.restraints.pick(s)
-
-        s.energy()
-
-        s.randomize_xyz(deviation=4.0)
-
-        mdl1.env.edat.nonbonded_sel_atoms=2
-        optimize(s, sched)
-
-        #feels environment (energy computed on pairs that have at least one member
-        #in the selected)
-        mdl1.env.edat.nonbonded_sel_atoms=1
-        optimize(s, sched)
-
-        s.energy()
-
-        #give a proper name
-        mdl1.write(file=modelname+restyp+respos)
-
-        #delete the temporary file
-        os.remove(modelname+restyp+respos+'.tmp')
+     
+        gromacs.editconf(f = modelname, resnr = first_res, o = modelname)
         
+
+        if re.search('no_mutation', mutation) is not None:
+            print 'No mutations here'
+        else:
+            print "Looks like we've got a mutation.  Let's check it out. \n"
+            different_mutations = re.split('&', mutation)
+            for mutant_res in range(0, len(different_mutations)):
+                is_mutated = re.search(r"([a-z])([0-9]+)([a-z])", different_mutations[mutant_res], re.I)
+                if is_mutated:
+                    mutations_list = is_mutated.groups()
+                    respos = mutations_list[1]
+                    restyp = pdb.Polypeptide.one_to_three(mutations_list[0]) #get three letter code
+
+                    def optimize(atmsel, sched):
+                        #conjugate gradient
+                        for step in sched:
+                            step.optimize(atmsel, max_iterations=200, min_atom_shift=0.001)
+                        #md
+                        refine(atmsel)
+                        cg = conjugate_gradients()
+                        cg.optimize(atmsel, max_iterations=200, min_atom_shift=0.001)
+
+
+                    #molecular dynamics
+                    def refine(atmsel):
+                        # at T=1000, max_atom_shift for 4fs is cca 0.15 A.
+                        md = molecular_dynamics(cap_atom_shift=0.39, md_time_step=4.0,
+                                                md_return='FINAL')
+                        init_vel = True
+                        for (its, equil, temps) in ((200, 20, (150.0, 250.0, 400.0, 700.0, 1000.0)),
+                                                    (200, 600,
+                                                     (1000.0, 800.0, 600.0, 500.0, 400.0, 300.0))):
+                            for temp in temps:
+                                md.optimize(atmsel, init_velocities=init_vel, temperature=temp,
+                                             max_iterations=its, equilibrate=equil)
+                                init_vel = False
+
+
+                    #use homologs and dihedral library for dihedral angle restraints
+                    def make_restraints(mdl1, aln):
+                       rsr = mdl1.restraints
+                       rsr.clear()
+                       s = selection(mdl1)
+                       for typ in ('stereo', 'phi-psi_binormal'):
+                           rsr.make(s, restraint_type=typ, aln=aln, spline_on_site=True)
+                       for typ in ('omega', 'chi1', 'chi2', 'chi3', 'chi4'):
+                           rsr.make(s, restraint_type=typ+'_dihedral', spline_range=4.0,
+                                    spline_dx=0.3, spline_min_points = 5, aln=aln,
+                                    spline_on_site=True)
+
+                    #first argument
+
+                    #figure out a way to get modelname from pdb
+                    #use regex to split at the first number
+
+                    log.verbose()
+
+                    # Set a different value for rand_seed to get a different final model
+                    env = environ(rand_seed=-49837)
+
+                    env.io.hetatm = True
+                    #soft sphere potential
+                    env.edat.dynamic_sphere=False
+                    #lennard-jones potential (more accurate)
+                    env.edat.dynamic_lennard=True
+                    env.edat.contact_shell = 4.0
+                    env.edat.update_dynamic = 0.39
+
+                    # Read customized topology file with phosphoserines (or standard one)
+                    env.libs.topology.read(file='$(LIB)/top_heav.lib')
+
+                    # Read customized CHARMM parameter library with phosphoserines (or standard one)
+                    env.libs.parameters.read(file='$(LIB)/par.lib')
+
+
+                    # Read the original PDB file and copy its sequence to the alignment array:
+                    mdl1 = model(env, file=modelname)
+                    ali = alignment(env)
+                    ali.append_model(mdl1, atom_files=modelname, align_codes=modelname)
+
+                    #set up the mutate residue selection segment
+                    s = selection(mdl1.residues[respos])
+
+                    #perform the mutate residue operation
+                    s.mutate(residue_type=restyp)
+                    #get two copies of the sequence.  A modeller trick to get things set up
+                    ali.append_model(mdl1, align_codes=modelname)
+
+                    # Generate molecular topology for mutant
+                    mdl1.clear_topology()
+                    mdl1.generate_topology(ali[-1])
+
+
+                    # Transfer all the coordinates you can from the template native structure
+                    # to the mutant (this works even if the order of atoms in the native PDB
+                    # file is not standard):
+                    #here we are generating the model by reading the template coordinates
+                    mdl1.transfer_xyz(ali)
+
+                    # Build the remaining unknown coordinates
+                    mdl1.build(initialize_xyz=False, build_method='INTERNAL_COORDINATES')
+
+                    #yes model2 is the same file as model1.  It's a modeller trick.
+                    mdl2 = model(env, file=modelname)
+
+                    #required to do a transfer_res_numb
+                    #ali.append_model(mdl2, atom_files=modelname, align_codes=modelname)
+                    #transfers from "model 2" to "model 1"
+                    mdl1.res_num_from(mdl2,ali)
+
+                    #It is usually necessary to write the mutated sequence out and read it in
+                    #before proceeding, because not all sequence related information about MODEL
+                    #is changed by this command (e.g., internal coordinates, charges, and atom
+                    #types and radii are not updated).
+
+                    mdl1.write(file=modelname+restyp+respos+'.tmp')
+                    mdl1.read(file=modelname+restyp+respos+'.tmp')
+
+                    #set up restraints before computing energy
+                    #we do this a second time because the model has been written out and read in,
+                    #clearing the previously set restraints
+                    make_restraints(mdl1, ali)
+
+                    #a non-bonded pair has to have at least as many selected atoms
+                    mdl1.env.edat.nonbonded_sel_atoms=1
+
+                    sched = autosched.loop.make_for_model(mdl1)
+
+                    #only optimize the selected residue (in first pass, just atoms in selected
+                    #residue, in second pass, include nonbonded neighboring atoms)
+                    #set up the mutate residue selection segment
+                    s = selection(mdl1.residues[respos])
+
+                    mdl1.restraints.unpick_all()
+                    mdl1.restraints.pick(s)
+
+                    s.energy()
+
+                    s.randomize_xyz(deviation=4.0)
+
+                    mdl1.env.edat.nonbonded_sel_atoms=2
+                    optimize(s, sched)
+
+                    #feels environment (energy computed on pairs that have at least one member
+                    #in the selected)
+                    mdl1.env.edat.nonbonded_sel_atoms=1
+                    optimize(s, sched)
+
+                    s.energy()
+
+                    #give a proper name
+                    mdl1.write(file=briefname+restyp+respos+'.pdb')
+
+                    #delete the temporary file
+                    os.remove(modelname+restyp+respos+'.tmp')
+                    
+                    modelname = (briefname+restyp+respos+'.pdb')
+                    briefname = (briefname+restyp+respos)
+                else:
+                    print 'Mutation of '+pdb_name+' not recognized. Going to take note of this.'
+                    bad_mutation = open('bad_mutation_PDBs.csv','a')
+                    bad_mutation.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
+                    bad_mutation.close()
+            
