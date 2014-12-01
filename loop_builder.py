@@ -48,7 +48,7 @@ To do:
     sanity check to make sure that it is actually complete or incomplete
 """
 
-datafile = open('./structures2.csv', 'r') #Opens the structures file for reading
+datafile = open('./temp.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -164,13 +164,13 @@ for i in range(1, len(pdb_info)):
                     else: 
                         return selection(self.residue_range(first_missing + ':', last_missing + ':'),
                                          self.residue_range(last_res_in_range + ':', last_res + ':'))
-                else if first_res_in_range != first_res and last_res_in_range == last_res:
+                elif first_res_in_range != first_res and last_res_in_range == last_res:
                     if not last_missing:
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'))
                     else: 
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
                                          self.residue_range(first_missing + ':', last_missing + ':'))
-                else if first_res_in_range != first_res and last_res_in_range != last_res:
+                elif first_res_in_range != first_res and last_res_in_range != last_res:
                     if not first_missing: # can use first_missing because if first_missing is empty, so is last_missing
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
                                          self.residue_range(last_res_in_range + ':', last_res + ':'))
