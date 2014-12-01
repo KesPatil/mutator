@@ -22,7 +22,6 @@ I do not have the practical knowlede to make it do exactly what I want.
 Known issues: 
     the paths are hard coded, you will need to modify them
     some structures hang up due to problems with modeller
-    If statements pertaining to first_res and first_res_in_range might be messed up 
 
 To do:
     fix issues with knots!
@@ -165,13 +164,13 @@ for i in range(1, len(pdb_info)):
                     else: 
                         return selection(self.residue_range(first_missing + ':', last_missing + ':'),
                                          self.residue_range(last_res_in_range + ':', last_res + ':'))
-                if first_res_in_range != first_res and last_res_in_range == last_res:
+                else if first_res_in_range != first_res and last_res_in_range == last_res:
                     if not last_missing:
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'))
                     else: 
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
                                          self.residue_range(first_missing + ':', last_missing + ':'))
-                if first_res_in_range != first_res and last_res_in_range != last_res:
+                else if first_res_in_range != first_res and last_res_in_range != last_res:
                     if not first_missing: # can use first_missing because if first_missing is empty, so is last_missing
                         return selection(self.residue_range(first_res + ':', first_res_in_range + ':'),
                                          self.residue_range(last_res_in_range + ':', last_res + ':'))
