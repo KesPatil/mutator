@@ -2,13 +2,12 @@
 from modeller import *
 from modeller.optimizers import molecular_dynamics, conjugate_gradients
 from modeller.automodel import *
+from modeller.scripts import complete_pdb
 from Bio import PDB as pdb
 import re
 import csv
 import os, glob
 import gromacs
-import subprocess
-
 
 """
 loop_builder.py
@@ -214,22 +213,26 @@ for i in range(1, len(pdb_info)):
                 os.rename(protein_name+'.D00000001', './actives/complete/'+protein_name+'_active_logFile')
                 modelname = ('./actives/complete/'+protein_name+'_active.pdb')
                 briefname = ('./actives/complete/'+protein_name+'_active')
+                dir_name = ('./actives/complete/')
             else:
                 os.rename(protein_name+'.B99990001.pdb', './actives/incomplete/'+protein_name+'_active.pdb') 
                 os.rename(protein_name+'.D00000001', './actives/incomplete/'+protein_name+'_active_logFile')
                 modelname = ('./actives/incomplete/'+protein_name+'_active.pdb')
                 briefname = ('./actives/incomplete/'+protein_name+'_active')
+                dir_name = ('./actives/incomplete/')
         if re.match("inactive", structure_conf) is not None: 
             if re.match("yes", complete) is not None:
                 os.rename(protein_name+'.B99990001.pdb', './inactives/complete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/complete/'+protein_name+'_inactive_logFile')
                 modelname = ('./inactives/complete/'+protein_name+'_inactive.pdb')
                 briefname = ('./inactives/complete/'+protein_name+'_inactive')
+                dir_name - ('./inactives/complete/')
             else:
                 os.rename(protein_name+'.B99990001.pdb', './inactives/incomplete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/incomplete/'+protein_name+'_inactive_logFile')
                 modelname = ('./inactives/incomplete/'+protein_name+'_inactive.pdb')
                 briefname = ('./inactives/incomplete/'+protein_name+'_inactive')
+                dir_name = ('./inactives/incomplete/')
         for filename in glob.glob("./"+protein_name+"*"):
             os.remove(filename)
          
@@ -250,6 +253,7 @@ for i in range(1, len(pdb_info)):
                     respos = mutations_list[1]
                     restyp = pdb.Polypeptide.one_to_three(mutations_list[0]) #get three letter code
 
+                    #makes use of the optimize function in modeller
                     def optimize(atmsel, sched):
                         #conjugate gradient
                         for step in sched:
@@ -287,11 +291,6 @@ for i in range(1, len(pdb_info)):
                                     spline_dx=0.3, spline_min_points = 5, aln=aln,
                                     spline_on_site=True)
 
-                    #first argument
-
-                    #figure out a way to get modelname from pdb
-                    #use regex to split at the first number
-
                     log.verbose()
 
                     # Set a different value for rand_seed to get a different final model
@@ -302,6 +301,7 @@ for i in range(1, len(pdb_info)):
                     env.edat.dynamic_sphere=False
                     #lennard-jones potential (more accurate)
                     env.edat.dynamic_lennard=True
+                    #https://salilab.org/modeller/manual/node127.html to learn more about contact_shell and update_dynamic
                     env.edat.contact_shell = 4.0
                     env.edat.update_dynamic = 0.39
 
@@ -400,4 +400,39 @@ for i in range(1, len(pdb_info)):
                     bad_mutation = open('bad_mutation_PDBs.csv','a')
                     bad_mutation.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
                     bad_mutation.close()
-        
+   
+#write the align-multiple.ali
+        env = environ()
+        env.io.atom_files_directory = ['./']
+        env.libs.topology.read(file='$(LIB)/top_heav.lib')
+        env.libs.parameters.read(file='$(LIB)/par.lib')
+
+        template = ('./actives/complete/ABL1_active.pdb')
+        mdl = complete_pdb(env, modelname)
+        mdl2 = complete_pdb(env, template)
+        # Write out chain sequences:
+        for c in mdl.chains:
+            c.write(file='align-multiple1.ali', atom_file=modelname,
+                    align_code=modelname)
+        for c in mdl2.chains:
+            c.write(file='align-multiple2.ali', atom_file=template,
+                    align_code=template)
+        filenames = ['align-multiple1.ali', 'align-multiple2.ali']
+        with open('./align-multiple.ali', 'w') as outfile:
+            for fname in filenames:
+                with open(fname) as infile:
+                    outfile.write(infile.read())
+        log.verbose()    # request verbose output
+        env = environ()  # create a new MODELLER environment to build this model in
+
+        # directories for input atom files
+        env.io.atom_files_directory = ['./']
+
+        a = automodel(env,
+                      alnfile  = 'align-multiple.ali', # alignment filename
+                      knowns   = (template),     # codes of the templates
+                      sequence = modelname)               # code of the target
+        a.starting_model= 1                 # index of the first model
+        a.ending_model  = 1                 # index of the last model
+                                            # (determines how many models to calculate)
+        a.make()                            # do the actual comparative modeling
