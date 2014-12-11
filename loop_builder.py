@@ -48,7 +48,7 @@ To do:
     sanity check to make sure that it is actually complete or incomplete
 """
 
-datafile = open('./temp.csv', 'r') #Opens the structures file for reading
+datafile = open('./structures.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -213,26 +213,34 @@ for i in range(1, len(pdb_info)):
                 os.rename(protein_name+'.D00000001', './actives/complete/'+protein_name+'_active_logFile')
                 modelname = ('./actives/complete/'+protein_name+'_active.pdb')
                 briefname = ('./actives/complete/'+protein_name+'_active')
+                briefername = (protein_name+'_active')
                 dir_name = ('./actives/complete/')
+                is_active = 1
             else:
                 os.rename(protein_name+'.B99990001.pdb', './actives/incomplete/'+protein_name+'_active.pdb') 
                 os.rename(protein_name+'.D00000001', './actives/incomplete/'+protein_name+'_active_logFile')
                 modelname = ('./actives/incomplete/'+protein_name+'_active.pdb')
                 briefname = ('./actives/incomplete/'+protein_name+'_active')
+                briefername = (protein_name+'_active')
                 dir_name = ('./actives/incomplete/')
+                is_active = 1
         if re.match("inactive", structure_conf) is not None: 
             if re.match("yes", complete) is not None:
                 os.rename(protein_name+'.B99990001.pdb', './inactives/complete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/complete/'+protein_name+'_inactive_logFile')
                 modelname = ('./inactives/complete/'+protein_name+'_inactive.pdb')
                 briefname = ('./inactives/complete/'+protein_name+'_inactive')
-                dir_name - ('./inactives/complete/')
+                briefername = (protein_name+'_inactive')
+                dir_name = ('./inactives/complete/')
+                is_active = 0
             else:
                 os.rename(protein_name+'.B99990001.pdb', './inactives/incomplete/'+protein_name+'_inactive.pdb') 
                 os.rename(protein_name+'.D00000001', './inactives/incomplete/'+protein_name+'_inactive_logFile')
                 modelname = ('./inactives/incomplete/'+protein_name+'_inactive.pdb')
                 briefname = ('./inactives/incomplete/'+protein_name+'_inactive')
+                briefername = (protein_name+'_inactive')
                 dir_name = ('./inactives/incomplete/')
+                is_active = 0
         for filename in glob.glob("./"+protein_name+"*"):
             os.remove(filename)
          
@@ -395,18 +403,32 @@ for i in range(1, len(pdb_info)):
                     
                     modelname = (briefname+restyp+respos+'.pdb')
                     briefname = (briefname+restyp+respos)
+                    briefername = (briefername+restyp+respos)
                 else:
                     print 'Mutation of '+pdb_name+' not recognized. Going to take note of this.'
                     bad_mutation = open('bad_mutation_PDBs.csv','a')
                     bad_mutation.write(pdb_name+','+protein_name+','+complete+','+structure_conf+','+mutation+"\n")
                     bad_mutation.close()
+        if (is_active == 1):
+            template = ('./actives/complete/ABL1_active.pdb')
+            template_briefname = ('ABL1_active')
+            pml_viewer = open('./active_aligner.pml', 'a')
+            pml_viewer.write('load '+modelname+"\n"+'hide lines, '+briefername+"\n"+'show cartoon, '
+                             +briefername+"\n"+'align '+briefername+', '+template_briefname+', '+'cycles=0'"\n"+"\n")
+        else:
+            template = ('./inactives/complete/ABL1_inactive.pdb')
+            template_briefname = ('ABL1_inactive')
+            pml_viewer = open('./inactive_aligner.pml', 'a')
+            pml_viewer.write('load '+modelname+"\n"+'hide lines, '+briefername+"\n"+'show cartoon, '
+                             +briefername+"\n"+'align '+briefername+', '+template_briefname+', '+'cycles=0'"\n"+"\n")
    
 #write the align-multiple.ali
+        """
         env = environ()
         env.io.atom_files_directory = ['./']
         env.libs.topology.read(file='$(LIB)/top_heav.lib')
         env.libs.parameters.read(file='$(LIB)/par.lib')
-
+        
         template = ('./actives/complete/ABL1_active.pdb')
         mdl = complete_pdb(env, modelname)
         mdl2 = complete_pdb(env, template)
@@ -422,6 +444,49 @@ for i in range(1, len(pdb_info)):
             for fname in filenames:
                 with open(fname) as infile:
                     outfile.write(infile.read())
+
+        log.verbose()
+        env = environ()
+        env.io.atom_files_directory = ['./']
+
+        aln = alignment(env)
+        for (code) in ((template), ('1uld', 'D'), ('1ulf', 'B'),
+                              ('1ulg', 'B'), ('1is5', 'A')):
+            mdl = model(env, file=code, model_segment=('FIRST:A', 'LAST:A'))
+            aln.append_model(mdl, atom_files=code, align_codes=code)
+
+        for (weights, write_fit, whole) in (((1., 0., 0., 0., 1., 0.), False, True),
+                                            ((1., 0.5, 1., 1., 1., 0.), False, True),
+                                            ((1., 1., 1., 1., 1., 0.), True, False)):
+            aln.salign(rms_cutoff=3.5, normalize_pp_scores=False,
+                       rr_file='$(LIB)/as1.sim.mat', overhang=30,
+                       gap_penalties_1d=(-450, -50),
+                       gap_penalties_3d=(0, 3), gap_gap_score=0, gap_residue_score=0,
+                       dendrogram_file='1is3A.tree',
+                       alignment_type='tree', # If 'progresive', the tree is not
+                                              # computed and all structues will be
+                                              # aligned sequentially to the first
+                       #ext_tree_file='1is3A_exmat.mtx', # Tree building can be avoided
+                                                         # if the tree is input
+                       feature_weights=weights, # For a multiple sequence alignment only
+                                                # the first feature needs to be non-zero
+                       improve_alignment=True, fit=True, write_fit=write_fit,
+                       write_whole_pdb=whole, output='ALIGNMENT QUALITY')
+
+        aln.write(file='1is3A.pap', alignment_format='PAP')
+        aln.write(file='1is3A.ali', alignment_format='PIR')
+
+        # The number of equivalent positions at different RMS_CUTOFF values can be
+        # computed by changing the RMS value and keeping all feature weights = 0
+        aln.salign(rms_cutoff=1.0,
+                   normalize_pp_scores=False, rr_file='$(LIB)/as1.sim.mat', overhang=30,
+                   gap_penalties_1d=(-450, -50), gap_penalties_3d=(0, 3),
+                   gap_gap_score=0, gap_residue_score=0, dendrogram_file='1is3A.tree',
+                   alignment_type='progressive', feature_weights=[0]*6,
+                   improve_alignment=False, fit=False, write_fit=True,
+                   write_whole_pdb=False, output='QUALITY')
+        
+
         log.verbose()    # request verbose output
         env = environ()  # create a new MODELLER environment to build this model in
 
@@ -436,3 +501,4 @@ for i in range(1, len(pdb_info)):
         a.ending_model  = 1                 # index of the last model
                                             # (determines how many models to calculate)
         a.make()                            # do the actual comparative modeling
+        """
