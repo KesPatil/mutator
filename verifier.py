@@ -46,15 +46,16 @@ for i in range(1, len(pdb_info)):
 	regex = re.split('\n'+'ATOM', fp.read())
 	adder = regex[0]
 	adder = re.sub(pdb_name, 'cropped_'+protein_name+'_active', adder)
-	random_int = random.randint(first_res + 10, last_res - 10)
-	residues_to_remove = [random_int, random_int+1, random_int+2, random_int+3, random_int+4, random_int+5, random_int+6, random_int+7, random_int+8, random_int+9]
+	random_int = random.randint(first_res, last_res - 21)
+	residues_to_remove = []
+	for j in range(1, 5):
+		residues_to_remove.append(random_int + j)
 	parser = pdb.PDBParser()
 	structure = parser.get_structure("name", pdb_file)
 	first_model = structure[0]
 	for chain in first_model:
 	    for id in residues_to_remove:
 	        chain.detach_child((' ', id, ' '))
-
 	io = pdb.PDBIO()
 	io.set_structure(first_model)
 	io.save('./cropped/cropped_'+protein_name+'_active.pdb')
@@ -67,6 +68,7 @@ for i in range(1, len(pdb_info)):
 	template_briefname = ('cropped_'+protein_name)
 	template_csv = open('cropped_actives.csv','a')
 	template_csv.write(template_briefname+','+template_briefname+'_modelled,'+'no,'+structure_conf+','+mutation+"\n")
+	
 	"""
 	class Prepender:
 
