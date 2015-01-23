@@ -12,42 +12,11 @@ import random
 import numpy
 
 """
-loop_builder.py
+location_missing_res.py
 
-This program fills in missing residues from (correctly formatted) pdb files.
-It reads in the coordinates and detects any missing residues and then
-gives an alignment file that can be used for loop modeling. It currently
-does not do a very good job, as modeller is both poorly executed and also
-I do not have the practical knowlede to make it do exactly what I want.
-
-Known issues: 
-    the paths are hard coded, you will need to modify them
-    tested 3CQU-A and 3O96-A, got RMSD of 1.5 -- not as good as could be
-    when the first residue is missing, it can't write the alignment file
-
-To do:
-    fix issues with knots!
-        *** (DONE) ***
-        *** Solution: make sure the dashes in the "active.ali" file are of
-        correct length ***
-    modify way it reads in sequence so that models are automatically given
-        the correct name including active/inactive designation *** (DONE) ***
-    put in loop to automatically put in regions to modify (now hard coded)
-        *** (DONE) ***
-    put it in a loop so that it reads the active/inactive templates and then
-        create models in a separate directory *** (DONE) ***
-        *** (DONE) ***
-    put in a sanity check to make sure there are no mutations in the pdb 
-        structures (we know there are some) and use modeller to mutate
-        these back 
-        *** how to call mutate_model.py? ***
-        *** should I make a new text file that will save the mutated models,
-        then feed that text file into mutate_model.py? ***
-    maybe put in a sanity check at the end that compares models of similar
-        sequence or structure
-    maybe autoload into pymol?
-    maybe a sanity check for whether protein_name is correct?
-    sanity check to make sure that it is actually complete or incomplete
+This program uses kinase_domain_info_uniprot.csv in order to determine the location
+of missing residues within kinase domain subdomains.  This is useful information, as
+it will tell us the sections that loop_builder.py will be building back.  
 """
 
 datafile = open('./temp.csv', 'r') #Opens the structures file for reading
