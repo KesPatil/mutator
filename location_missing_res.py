@@ -18,7 +18,7 @@ of missing residues within kinase domain subdomains.  This is useful information
 it will tell us the sections that loop_builder.py will be building back.  
 """
 
-datafile = open('./temp.csv', 'r') #Opens the structures file for reading
+datafile = open('./structures.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -164,16 +164,15 @@ for i in range(1, len(pdb_info)):
                         cat_counter += 1
                     if missing_set[j] in in_actloop:
                         actloop_counter += 1
+            missing_subdomains = open('./missing_subdomains.csv', 'a')
+            missing_subdomains.write(protein_name+','+str(ploop_counter)+','+str(alphac_counter)+','+str(cat_counter)+','+str(actloop_counter)+"\n")
         else:
             print "looks like we've got a problem here"
             print first_res
             print last_res
             print kd_start
             print kd_end
-        print ploop_counter
-        print alphac_counter
-        print cat_counter
-        print actloop_counter
+
 
         
 
