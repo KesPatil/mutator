@@ -18,7 +18,7 @@ of missing residues within kinase domain subdomains.  This is useful information
 it will tell us the sections that loop_builder.py will be building back.  
 """
 
-datafile = open('./structures.csv', 'r') #Opens the structures file for reading
+datafile = open('./structures2.csv', 'r') #Opens the structures file for reading
 datareader = csv.reader(datafile) #reads structures file
 data = [] #initializes a list called data
 for row in datareader:
@@ -81,21 +81,12 @@ for i in range(1, len(pdb_info)):
             cat_end = int(kinase_domain_info[j].catend)
             actloop_start = int(kinase_domain_info[j].activationloopstart)
             actloop_end = int(kinase_domain_info[j].activationloopend)
-    print kd_start
-    print kd_end
-    print ploop_start
-    print ploop_end
-    print alphac_start
-    print alphac_end
-    print cat_start
-    print cat_end
-    print actloop_start
-    print actloop_end
     in_kd = range(kd_start, kd_end + 1)
     in_ploop = range(ploop_start, ploop_end + 1)
     in_alphac = range(alphac_start, alphac_end + 1)
     in_cat = range(cat_start, cat_end + 1)
     in_actloop = range(actloop_start, actloop_end + 1)
+
 
     """
     search for a given string where protein_name == kinase_domain_info.protein_name
@@ -149,12 +140,12 @@ for i in range(1, len(pdb_info)):
         alphac_counter = 0
         cat_counter = 0
         actloop_counter = 0
+        else_counter = 0
 
         if (first_res == kd_start and last_res == kd_end):
             print "good to go"
             for i in range(len(first_missing)):
                 missing_set = range(first_missing[i], last_missing[i] + 1)
-                print missing_set
                 for j in range(len(missing_set)):
                     if missing_set[j] in in_ploop:
                         ploop_counter += 1
@@ -164,8 +155,10 @@ for i in range(1, len(pdb_info)):
                         cat_counter += 1
                     if missing_set[j] in in_actloop:
                         actloop_counter += 1
+                    else:
+                        else_counter += 1
             missing_subdomains = open('./missing_subdomains.csv', 'a')
-            missing_subdomains.write(protein_name+','+str(ploop_counter)+','+str(alphac_counter)+','+str(cat_counter)+','+str(actloop_counter)+"\n")
+            missing_subdomains.write(protein_name+'_'+structure_conf+','+str(ploop_counter)+','+str(alphac_counter)+','+str(cat_counter)+','+str(actloop_counter)+','+str(else_counter)+"\n")
         else:
             print "looks like we've got a problem here"
             print first_res
