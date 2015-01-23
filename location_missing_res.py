@@ -7,14 +7,13 @@ from Bio import PDB as pdb
 import re
 import csv
 import os, glob
-import gromacs
 import random
 import numpy
 
 """
 location_missing_res.py
 
-This program uses kinase_domain_info_uniprot.csv in order to determine the location
+This program uses all_kinase.csv in order to determine the location
 of missing residues within kinase domain subdomains.  This is useful information, as
 it will tell us the sections that loop_builder.py will be building back.  
 """
@@ -25,7 +24,7 @@ data = [] #initializes a list called data
 for row in datareader:
     data.append(row) #adds an element to data for each row in structures.csv 
 
-datafile2 = open('./kinase_domain_info_uniprot.csv', 'r') #Opens the structures file for reading
+datafile2 = open('./all_kinase.csv', 'r') #Opens the structures file for reading
 datareader2 = csv.reader(datafile2) #reads structures file
 data2 = [] #initializes a list called data
 for row in datareader2:
@@ -59,6 +58,7 @@ class Kinase_domain_info(object):
         self.activationloopstart = row[9]
         self.activationloopend = row[10]
 
+
 pdb_info = [PDB_info(item) for item in data]
 kinase_domain_info = [Kinase_domain_info(item) for item in data2] 
 #print pdb_info[0].id
@@ -70,14 +70,39 @@ for i in range(1, len(pdb_info)):
     structure_conf = pdb_info[i].conformation #saves active or inactive for conformation
     mutation = pdb_info[i].mutation
     for j in range (1, len(kinase_domain_info)):
-        if (protein_name == kinase_domain_info[j].id):
-            print kinase_domain_info[j]
+        if (protein_name == kinase_domain_info[j].protein_name):
+            kd_start = int(kinase_domain_info[j].kdstart)
+            kd_end = int(kinase_domain_info[j].kdend)
+            ploop_start = int(kinase_domain_info[j].ploopstart)
+            ploop_end = int(kinase_domain_info[j].ploopend)
+            alphac_start = int(kinase_domain_info[j].alphacstart)
+            alphac_end = int(kinase_domain_info[j].alphacend)
+            cat_start = int(kinase_domain_info[j].catstart)
+            cat_end = int(kinase_domain_info[j].catend)
+            actloop_start = int(kinase_domain_info[j].activationloopstart)
+            actloop_end = int(kinase_domain_info[j].activationloopend)
+    print kd_start
+    print kd_end
+    print ploop_start
+    print ploop_end
+    print alphac_start
+    print alphac_end
+    print cat_start
+    print cat_end
+    print actloop_start
+    print actloop_end
+    in_kd = range(kd_start, kd_end + 1)
+    in_ploop = range(ploop_start, ploop_end + 1)
+    in_alphac = range(alphac_start, alphac_end + 1)
+    in_cat = range(cat_start, cat_end + 1)
+    in_actloop = range(actloop_start, actloop_end + 1)
+
     """
     search for a given string where protein_name == kinase_domain_info.protein_name
     then go to that line
     use regex to do this
     """
-    """
+    
     print pdb_name
     pdb_file = ('./PDBs/'+pdb_name+'.pdb')
     if os.path.isfile(pdb_file) != True: #if there is no pdb_file, then make a note of it and continue with next pdb
@@ -92,9 +117,6 @@ for i in range(1, len(pdb_info)):
         structure_sequence = ''
         first_range = []
         last_range = []
-        for seq in ppb.build_peptides(struct):
-            print seq.get_sequence()
-        #read in the full sequence from the pdb file
         full_sequence = ''
         lines = fp.readlines()
         first = lines[0]
@@ -123,11 +145,37 @@ for i in range(1, len(pdb_info)):
         first_missing = [x + 1 for x in last_range] #will use this to make missing residue ranges
         last_missing = [x - 1 for x in first_range] #will use this to make missing residue ranges
 
-        missing_set = set(range(first_missing[0], last_missing[0]))
-        b = set(range(725, 727))
-        c = list(missing_set & b)
-        print c 
-        """
+        ploop_counter = 0
+        alphac_counter = 0
+        cat_counter = 0
+        actloop_counter = 0
+
+        if (first_res == kd_start and last_res == kd_end):
+            print "good to go"
+            for i in range(len(first_missing)):
+                missing_set = range(first_missing[i], last_missing[i] + 1)
+                print missing_set
+                for j in range(len(missing_set)):
+                    if missing_set[j] in in_ploop:
+                        ploop_counter += 1
+                    if missing_set[j] in in_alphac:
+                        alphac_counter += 1
+                    if missing_set[j] in in_cat:
+                        cat_counter += 1
+                    if missing_set[j] in in_actloop:
+                        actloop_counter += 1
+        else:
+            print "looks like we've got a problem here"
+            print first_res
+            print last_res
+            print kd_start
+            print kd_end
+        print ploop_counter
+        print alphac_counter
+        print cat_counter
+        print actloop_counter
+
+        
 
 
         
