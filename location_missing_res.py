@@ -85,8 +85,10 @@ class Kinase_domain_info(object):
         self.ploopend = row[4] 
         self.alphacstart = row[5]
         self.alphacend = row[6]
-        self.activationloopstart = row[7]
-        self.activationloopend = row[8]
+        self.catstart = row[7]
+        self.catend = row[8]
+        self.activationloopstart = row[9]
+        self.activationloopend = row[10]
 
 pdb_info = [PDB_info(item) for item in data]
 kinase_domain_info = [Kinase_domain_info(item) for item in data2] 
@@ -98,12 +100,15 @@ for i in range(1, len(pdb_info)):
     complete = pdb_info[i].complete #saves yes or no for complete
     structure_conf = pdb_info[i].conformation #saves active or inactive for conformation
     mutation = pdb_info[i].mutation
-
+    for j in range (1, len(kinase_domain_info)):
+        if (protein_name == kinase_domain_info[j].id):
+            print kinase_domain_info[j]
     """
     search for a given string where protein_name == kinase_domain_info.protein_name
-    then go to that line 
+    then go to that line
+    use regex to do this
     """
-
+    """
     print pdb_name
     pdb_file = ('./PDBs/'+pdb_name+'.pdb')
     if os.path.isfile(pdb_file) != True: #if there is no pdb_file, then make a note of it and continue with next pdb
@@ -129,6 +134,7 @@ for i in range(1, len(pdb_info)):
         first_res = int(header_list[1])
         last_res = int(header_list[3])
 
+        
         for seq in ppb.build_peptides(struct):
             #use this re to get the chain breaks
             search = re.search('start=([0-9]{1,5}).+end=([0-9]{1,5})',"{0}".format(seq))
@@ -141,9 +147,6 @@ for i in range(1, len(pdb_info)):
             last = search.groups()[1]
             structure_sequence += seq.get_sequence()
 
-            #print (int(first)-21),(int(last)-21)
-        print structure_sequence
-
         first_range = map(int, first_range) #makes this an integer array
         last_range = map(int, last_range) #makes this an integer array
         first_res_in_range = first_range.pop(0) #gets rid of the first element
@@ -155,6 +158,7 @@ for i in range(1, len(pdb_info)):
         b = set(range(725, 727))
         c = list(missing_set & b)
         print c 
+        """
 
 
         
