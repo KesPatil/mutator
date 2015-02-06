@@ -1,6 +1,8 @@
 from modeller import *
 from modeller.automodel import *
 from modeller.scripts import complete_pdb
+import re
+import csv
 
 """
 sequence2structure.py
@@ -16,10 +18,61 @@ TO DO:
 2) Currently works in split up sections, but not all together -- need to fix this ASAP
 """
 
+datafile = open('./kinase_clustalo.csv', 'r') #Opens the structures file for reading
+"""
+datareader = csv.reader(datafile) #reads structures file
+data = [] #initializes a list called data
+for row in datareader:
+    data.append(row) #adds an element to data for each row in structures.csv 
+"""
+
+def second_largest(numbers):
+    count = 0
+    m1 = m2 = float('-inf')
+    for x in numbers:
+        count += 1
+        if x > m2:
+            if x >= m1:
+                m1, m2 = x, m1            
+            else:
+                m2 = x
+    return m2 if count >= 2 else None
+
+clustal_lines = datafile.readlines()
+index_line = clustal_lines[0]
+index = index_line.split(',')
+
+for i in range(1, len(clustal_lines)):
+	values_lines = clustal_lines[i]
+	values = values_lines.split(',')
+	protein_name = values[0]
+	
+	num_values = []
+	for j in range (1, len(values)):
+		num_values.append(float(values[j]))
+	#for k in range(0, len(int_values)):
+		#if int_values[k] == 100:
+		#	int_values[k] = 0
+		#if int_values[k] == max(int_values):
+		#	best_match_index = k
+	best_match = second_largest(num_values)
+	best_match_index = num_values.index(best_match) + 1
+	best_template = index[best_match_index]
+	
+	#best_match = int_values[best_match_index]
+	print protein_name, best_match, best_match_index, best_template
+
+	
+#	best_match = second_largest(int_values)
+#	re.search(best_match, int_values)
+#	print int_values
+	
+
+"""
 #salign.py
 log.verbose()
 env = environ()
-env.io.atom_files_directory = './:../atom_files/'
+env.io.atom_files_directory = './'
 
 aln = alignment(env)
 for (code, chain) in (('2mdh', 'A'), ('1bdm', 'A'), ('1b8p', 'A')):
@@ -100,3 +153,4 @@ mdl = complete_pdb(env, 'TvLDH.B99990001.pdb')
 s = selection(mdl)
 s.assess_dope(output='ENERGY_PROFILE NO_REPORT', file='TvLDH.profile',
               normalize_profile=True, smoothing_window=15)
+"""
