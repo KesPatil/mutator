@@ -57,29 +57,31 @@ for i in range (1, len(pdb_info)):
     #gives location of the pdb file
 	pdb_file = './PDBs/'+pdb_name+'.pdb'
 
+
     #gets name of the structure file
 	if structure_conf == 'active':
 		if complete == 'yes':
 			if mutation == 'no_mutations':
 				structure_file = './actives/complete/'+protein_name+'_active.pdb'
 			else:
-				structure_file = './actives/complete/'+protein_name+mutation+'_active.pdb'
+				different_mutations = re.split('&', mutation)
+				structure_file = './actives/complete/'+protein_name+'_active'+'.pdb'
 		else:
 			if mutation == 'no_mutations':
 				structure_file = './actives/incomplete/'+protein_name+'_active.pdb'
 			else:
-				structure_file = './actives/incomplete/'+protein_name+mutation+'_active.pdb'
+				structure_file = './actives/incomplete/'+protein_name+'_active'+'.pdb'
 	else:
 		if complete == 'yes':
 			if mutation == 'no_mutations':
 				structure_file = './inactives/complete/'+protein_name+'_inactive.pdb'
 			else:
-				structure_file = './inactives/complete/'+protein_name+mutation+'_inactive.pdb'
+				structure_file = './inactives/complete/'+protein_name+'_inactive'+'.pdb'
 		else:
 			if mutation == 'no_mutations':
 				structure_file = './inactives/incomplete/'+protein_name+'_inactive.pdb'
 			else:
-				structure_file = './inactives/incomplete/'+protein_name+mutation+'_inactive.pdb'
+				structure_file = './inactives/incomplete/'+protein_name+'_inactive'+'.pdb'
 
 
     #regular expression for the header (COMPLETE THIS)
@@ -109,6 +111,7 @@ for i in range (1, len(pdb_info)):
 		line_prepender(structure_file, rev_good_lines[m])
 
     #get missing residue ranges
+
 
     #parse sequence into counter (res #, res)
 
