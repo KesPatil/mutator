@@ -12,7 +12,7 @@ my @proteins;
 my @domains=("Protein kinase");
 #foreach(@domains){
 #    my $domain=$_;
-foreach(@all_uniprots){
+UNIPROT: foreach(@all_uniprots){
     my @line=split(/\.\n/,$_);
     my $protein_info='';
     my($uniprot_id, $protein_name, $short_name, @temporary_domains);
@@ -22,7 +22,7 @@ foreach(@all_uniprots){
     foreach(@line){
 	if(/\bAC\s+(\w{6})/){$uniprot_id=$1}
 	if(/RecName:\sFull=(.+);/){$protein_name=$1}
-	if(/GN\s+Name=([a-zA-Z0-9\-]+);/){$short_name=$1}
+	if(/GN\s+Name=([a-zA-Z0-9\-]+);/){$short_name=$1}# if($short_name!~/BMX/){next UNIPROT}}
 	if(/DR\s+PDB; ([a-zA-Z0-9\- ;\/\.=]+)/){push(@pdbs, $1)}
 	if(/FT\s+(DOMAIN)\s+(\d+)\s+(\d+)\s+($domains[0])/){
 	    $sequence_annotation=$1;
@@ -39,7 +39,7 @@ foreach(@all_uniprots){
 		foreach(@sequence_fragment){$raw_sequence.=$_}
 	    }
 	}
-	if($domain_start && $domain_end && $domain_type){
+	if($domain_start && $domain_end && $domain_type && $short_name){
 	    my $kinase_sequence=substr $raw_sequence,$domain_start-1,$domain_end-$domain_start+1;
 	    $protein_info=$domain_type."; ".$uniprot_id."; ".$protein_name.
 		"; ".$short_name."; ".$domain_start."; ".$domain_end.";".
@@ -183,7 +183,7 @@ sub make_protein_list{
     }
 }
 
-get_protein_chains(\@proteins);
+#get_protein_chains(\@proteins);
 sub get_protein_chains{
     my @proteins=@{$_[0]};
     foreach(@proteins){
@@ -196,11 +196,15 @@ sub get_protein_chains{
 	my $sequence=$header[6];
 	my @sequence=split(/(.{67})/,$sequence);
 	my %missing;
-	{local $|=1;
-	 printf "\r%-10s",$protein}
-	foreach(@structures){
+	{local $|=1;printf "\r%-10s",$protein}
+	LOOP: foreach(@structures){
 	    my $pdb_id=substr $_, 0, 4;
-	    my $pdb_text=get("http://www.pdb.org/pdb/files/$pdb_id.pdb") or die $!;
+	    my @existing=glob("./PDBs/$pdb_id-*.pdb"); #skip if seen pdb already
+	    foreach(@existing){
+		if(/$pdb_id/){next LOOP}
+	    }
+	    my $pdb_text=get("http://www.pdb.org/pdb/files/$pdb_id.pdb") or 
+		print "\nFailed to get $pdb_id\n" and next;
 	    my @pdb_lines=split(/\n/,$pdb_text);
 	    my @chain_list;
 	    my %chains;
@@ -290,3 +294,112 @@ EOF
     }
 }
 
+
+make_protein_list2(\@proteins);
+sub make_protein_list2{
+    my @proteins=@{$_[0]};
+    foreach(@proteins){
+	my @structures=split(/\|/,$_);
+	my @header=split(/;/,shift(@structures)); #get everything before the first |
+	my $uniprotID=$header[1];
+	my $protein=$header[3];
+	my $domain_start=$header[4];
+	my $domain_end=$header[5];
+	my $sequence=$header[6];
+	my @sequence=split(/(.{67})/,$sequence);
+	my %missing;
+	{local $|=1;printf "\r%-10s",$protein}
+	LOOP: foreach(@structures){
+	    my $pdb_id=substr $_, 0, 4;
+	    my @existing=glob("./PDBs/$pdb_id-*.pdb"); #skip if seen pdb already
+	    foreach(@existing){
+		if(/$pdb_id/){next LOOP}
+	    }
+	    my $pdb_text=get("http://www.pdb.org/pdb/files/$pdb_id.pdb") or
+		print "\nFailed to get $pdb_id\n" and next;
+	    my @pdb_lines=split(/\n/,$pdb_text);
+	    my %chains;
+	    foreach(@pdb_lines){
+		if(/^DBREF.+$uniprotID/){ #only take chains that contain our protein	
+		    my $chainID = substr $_, 12, 1;
+		    my $crystal_start = substr $_, 14, 4;
+		    my $crystal_end = substr $_, 20, 4;
+		    $crystal_start=~s/^\s+|\s+$//g;
+		    $crystal_end=~s/^\s+|\s+$//g;
+		    $chains{$chainID}="$crystal_start $crystal_end";
+		    #print "$pdb_id $chainID $chains{$chainID}\n";
+		}
+	    }
+	    while( my ($chain_id,$value) = each %chains){
+		my @seq_info=split(/ /,$value);
+		my $crystal_start=$seq_info[0];
+		my $crystal_end=$seq_info[1];
+		my $filename="./PDBs/".$pdb_id."-".$chain_id.".pdb";
+		my $nterm_missing_res = (($crystal_start-$domain_start)>0)? 
+		    ($crystal_start-$domain_start) : 0;
+		my $cterm_missing_res = (($domain_end-$crystal_end)>0)? 
+		    ($domain_end-$crystal_end) : 0;
+		my $missing_ends=$nterm_missing_res+$cterm_missing_res;
+		#print "$pdb_id $chain_id $crystal_start $domain_start $crystal_end $domain_end $missing_ends\n";
+		my ($res_idx,%seq_conflict);
+		open PDBFILE, '>', $filename or die $!;
+		print PDBFILE "HEADER    : $pdb_id-$chain_id: $domain_start: $chain_id: $domain_end: ";
+		print PDBFILE "$chain_id :$protein : : :\n";
+		foreach(@sequence){
+		    if(!/[A-Z]/){next}
+		    print PDBFILE "REMARK 300 $_\n";
+		}
+		if($pdb_text!~/REMARK 465/){
+		    print PDBFILE "REMARK 000\t$missing_ends/n";
+		}
+		foreach(@pdb_lines){
+		    my ($mutant_resname,$chainID,$wt_resname,$mutant_idx,$info);
+		    if(/SEQADV.+ENGINEERED MUTATION/){
+			$mutant_resname = substr $_, 12, 3;
+			$chainID = substr $_, 16, 1;
+			$wt_resname = substr $_, 39, 3;
+			$mutant_idx = substr $_, 19, 5;
+			$mutant_idx=~s/^\s+|\s+$//g; #trim spaces
+			if($chainID && $mutant_idx>=$domain_start && $mutant_idx<=$domain_end){
+			    print PDBFILE "REMARK 000\t$wt_resname-$mutant_idx-$mutant_resname\n";
+			}
+		    }
+		    if(/^MODRES/){
+			$mutant_resname = substr $_, 12, 3;
+			$chainID = substr $_, 16, 1;
+			$wt_resname = substr $_, 24, 3;
+			$mutant_idx = substr $_, 18, 5;
+			$mutant_idx=~s/^\s+|\s+$//g; #trim spaces
+			if($chainID && $mutant_idx>=$domain_start && $mutant_idx<=$domain_end){
+			    print PDBFILE "REMARK 000\t$wt_resname-$mutant_idx-$mutant_resname\n";
+			}
+		    }
+		}
+		foreach(@pdb_lines){
+		    if(/REMARK 465\s+([A-Z]{3})\s+$chain_id\s+([0-9]+)/){
+			my $res_type=$1;
+			my $res_idx=$2;
+			if($res_idx>=$domain_start && $res_idx<=$domain_end){
+			    print PDBFILE "REMARK 001\t$res_type\t$res_idx\n";
+			}
+		    }
+		}
+		foreach(@pdb_lines){
+		    if(/ATOM [A-Z0-9 ]{16}[$chain_id]\s{0,4}([0-9]{1,5})/){
+			my $res_idx=$1;
+			if($res_idx>=$domain_start && $res_idx<=$domain_end){
+			    print PDBFILE "$_\n";
+			}
+		    }
+		    if(/HETATM[A-Z0-9 ]{15}[$chain_id]\s{0,4}([0-9]{1,5})/){
+			my $res_idx=$1;
+			if($res_idx>=$domain_start && $res_idx<=$domain_end){
+			    print PDBFILE "$_\n";
+			}
+		    }
+		}
+		close PDBFILE;
+	    }
+	}
+    }
+}
