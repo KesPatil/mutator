@@ -4,10 +4,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn import metrics
 from sklearn.svm import SVC
 
-def get_data_sets(data_files, endpoints_file):
+def get_data_sets(data_files, endpoints_file, align_file_name):
     # Dataset: min_distance, field magnitude, planar similarity
     dataset = []
     classifications = []
+    align_file = open(align_file_name, "r+")
+    align_lines = align_file.readlines()
+    align_num = 615
     endpoint_info = extract_endpoints(endpoints_file)
     for t in data_files:
         print t[1]
@@ -28,21 +31,41 @@ def get_data_sets(data_files, endpoints_file):
         act_end = int(kinase_endpoints[len(kinase_endpoints)-1])
         alphac_start = int(kinase_endpoints[len(kinase_endpoints)-6])
         alphac_end = int(kinase_endpoints[len(kinase_endpoints)-5])
+        running_align_num = -1
+        equivalent_pos = -1
+        for j in range(0, len(align_lines)):
+            split_line = align_lines[j].split(" ")
+            if (len(split_line) == 3):
+                if (split_line[0] == "align"):
+                    running_align_num = int(split_line[2][:len(split_line[2])-1])
+                else:
+                    if (split_line[0][1:] == kinase_name and running_align_num == align_num):
+                        equivalent_pos = int(split_line[2][:len(split_line[2])-1])
+                        break
         cat_center_pos = [0.0, 0.0, 0.0]
+        act_mol_center = [0.0, 0.0, 0.0]
+        count_act_mol = 0
         i = 0
-        flag = 0
         while (i < len(pdb_lines)):
             if ("ATOM" in pdb_lines[i]):
                 if ((int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= cat_start) and (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= cat_end)):
-                    flag = 1
                     x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
                     y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
                     z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
                     cat_center_pos = [cat_center_pos[0]+x_value, cat_center_pos[1]+y_value, cat_center_pos[2]+z_value]
-                elif (flag == 1):
-                    break
+                elif (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) == equivalent_pos):
+                    x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
+                    y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
+                    z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
+                    act_mol_center[0] += x_value
+                    act_mol_center[1] += y_value
+                    act_mol_center[2] += z_value
+                    count_act_mol += 1
             i += 1
         cat_center_pos = np.array(cat_center_pos)/(cat_end-cat_start+1)
+        #act_mol_center[0] /= count_act_mol
+        #act_mol_center[1] /= count_act_mol
+        #act_mol_center[2] /= count_act_mol
         i = 0
         flag = 0
         flag2 = 0
@@ -84,6 +107,7 @@ def get_data_sets(data_files, endpoints_file):
         dataset.append([sum(min_distances)/len(min_distances)])
         #dataset.append([np.linalg.norm(cat_field)])
         #dataset[len(dataset)-1].append(np.linalg.norm(cat_field))
+        #dataset[len(dataset)-1].append(dist_3d(act_mol_center, cat_center_pos))
         X = np.array(X)
         Z = np.array(Z)
         least_squares = np.linalg.lstsq(X, Z)
@@ -94,8 +118,8 @@ def get_data_sets(data_files, endpoints_file):
     return [dataset, classifications]
 
 
-def kinase_logreg(training, testing, endpoints_file):
-    [dataset, classifications] = get_data_sets(training, endpoints_file)
+def kinase_logreg(training, testing, endpoints_file, align_file_name):
+    [dataset, classifications] = get_data_sets(training, endpoints_file, align_file_name)
     logreg_model = LogisticRegression()
     logreg_model.fit(dataset, classifications)
     training_predictions = logreg_model.predict(dataset)
@@ -103,14 +127,15 @@ def kinase_logreg(training, testing, endpoints_file):
     print metrics.classification_report(classifications, training_predictions)
     print metrics.confusion_matrix(classifications, training_predictions)
     print "Testing set results:"
-    [testset, test_classifications] = get_data_sets(testing, endpoints_file)
+    [testset, test_classifications] = get_data_sets(testing, endpoints_file, align_file_name)
     testing_predictions = logreg_model.predict(testset)
     print metrics.classification_report(test_classifications, testing_predictions)
     print metrics.confusion_matrix(test_classifications, testing_predictions)
+    return [logreg_model.coef_, logreg_model.intercept_]
 
 def kinase_svm(training, testing, endpoints_file):
-    [dataset, classifications] = get_data_sets(training, endpoints_file)
-    [testset, test_classifications] = get_data_sets(testing, endpoints_file)
+    [dataset, classifications] = get_data_sets(training, endpoints_file, align_file_name)
+    [testset, test_classifications] = get_data_sets(testing, endpoints_file, align_file_name)
     svm_model = SVC()
     svm_model.fit(dataset, classifications)
     training_predictions = svm_model.predict(dataset)
