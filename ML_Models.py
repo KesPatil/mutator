@@ -10,7 +10,12 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
     classifications = []
     align_file = open(align_file_name, "r+")
     align_lines = align_file.readlines()
+    # ABL1 388?
     align_num = 615
+    # ABL1 384
+    #align_num = 611
+    # ABL1 385
+    # align_num = 612
     endpoint_info = extract_endpoints(endpoints_file)
     for t in data_files:
         print t[1]
@@ -63,9 +68,10 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
                     count_act_mol += 1
             i += 1
         cat_center_pos = np.array(cat_center_pos)/(cat_end-cat_start+1)
-        #act_mol_center[0] /= count_act_mol
-        #act_mol_center[1] /= count_act_mol
-        #act_mol_center[2] /= count_act_mol
+        if (count_act_mol > 0):
+            act_mol_center[0] /= count_act_mol
+            act_mol_center[1] /= count_act_mol
+            act_mol_center[2] /= count_act_mol
         i = 0
         flag = 0
         flag2 = 0
@@ -107,7 +113,10 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
         dataset.append([sum(min_distances)/len(min_distances)])
         #dataset.append([np.linalg.norm(cat_field)])
         #dataset[len(dataset)-1].append(np.linalg.norm(cat_field))
-        #dataset[len(dataset)-1].append(dist_3d(act_mol_center, cat_center_pos))
+        if (count_act_mol > 0):
+            dataset[len(dataset)-1].append(dist_3d(act_mol_center, cat_center_pos))
+        else:
+            dataset[len(dataset)-1].append(0)
         X = np.array(X)
         Z = np.array(Z)
         least_squares = np.linalg.lstsq(X, Z)
@@ -126,11 +135,13 @@ def kinase_logreg(training, testing, endpoints_file, align_file_name):
     print "Training set results:"
     print metrics.classification_report(classifications, training_predictions)
     print metrics.confusion_matrix(classifications, training_predictions)
+    print metrics.roc_auc_score(classifications, training_predictions)
     print "Testing set results:"
     [testset, test_classifications] = get_data_sets(testing, endpoints_file, align_file_name)
     testing_predictions = logreg_model.predict(testset)
     print metrics.classification_report(test_classifications, testing_predictions)
     print metrics.confusion_matrix(test_classifications, testing_predictions)
+    print metrics.roc_auc_score(test_classifications, testing_predictions)
     return [logreg_model.coef_, logreg_model.intercept_]
 
 def kinase_svm(training, testing, endpoints_file):
@@ -142,5 +153,7 @@ def kinase_svm(training, testing, endpoints_file):
     testing_predictions = svm_model.predict(testset)
     print "Training set results:"
     print metrics.classification_report(classifications, training_predictions)
+    print metrics.roc_auc_score(classifications, training_predictions)
     print "Testing set results:"
     print metrics.classification_report(test_classifications, testing_predictions)
+    print metrics.roc_auc_score(test_classifications, testing_predictions)

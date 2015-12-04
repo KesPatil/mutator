@@ -441,6 +441,8 @@ def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos
                 if (split_line[0][1:] == kinase_name and int(split_line[2][:len(split_line[2])-1]) == pos):
                     align_num = int(split_line[2][:len(split_line[2])-1])
                     break
+    active_dists = []
+    inactive_dists = []
     for k in kinases:
         if (not os.path.isfile(k[0])) or (not os.path.isfile(k[1])): 
             continue
@@ -529,12 +531,24 @@ def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos
         cat_center[1] /= count2
         cat_center[2] /= count2
         inactive_dist = dist_3d(act_mol_center, cat_center)
+        active_dists.append(active_dist)
+        inactive_dists.append(inactive_dist)
         differences.append(inactive_dist-active_dist)
-    num_bins = 2
+    num_bins = 50
     #n, bins, patches = plt.hist(differences, num_bins, normed=1, facecolor='green', alpha=0.75)
-    n, bins, patches = plt.hist(differences, bins=[-30, 0, 30], normed=1, facecolor='green', alpha=0.75)
-    plt.xlabel('Differences between Active and Inactive Distances')
-    plt.ylabel('Probability')
-    plt.title('Histogram of Differences in Distance for Pos: ' + str(pos))
+    #n, bins, patches = plt.hist(differences, bins=[-30, 0, 30], normed=1, facecolor='green', alpha=0.75)
+    #plt.xlabel('Differences between Active and Inactive Distances')
+    #plt.ylabel('Probability')
+    #plt.title('Histogram of Differences in Distance for Pos: ' + str(pos))
+    ax = plt.figure().add_subplot(111)
+    ax.set_xlim(0, 40)
+    ax.set_ylim(-1, 1)
+    y = 0.0
+    # for d in differences:
+        # plt.plot(d, y, 'ro', ms = 15, mfc='r')
+    for a in active_dists:
+        plt.plot(a, y, 'ro', ms = 15, alpha=0.1, mfc='r')
+    for i in inactive_dists:
+        plt.plot(i, y, 'bo', ms=15, alpha=0.1, mfc='b')
     plt.show()
-    return differences
+    return differences, active_dists, inactive_dists
