@@ -11,11 +11,18 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
     align_file = open(align_file_name, "r+")
     align_lines = align_file.readlines()
     # ABL1 388?
-    align_num = 615
+    # align_num = 615
     # ABL1 384
     #align_num = 611
     # ABL1 385
     # align_num = 612
+    #pos_list = [385, 397, 395, 384, 392]
+    #pos_kinase_names = ["ABL1", "ABL1", "ABL1", "ABL1", "ABL1"]
+    pos_list = [385, 397, 395]
+    pos_kinase_names = ["ABL1", "ABL1", "ABL1"]
+    align_num_list = []
+    for p in range(0, len(pos_list)):
+        align_num_list.append(find_align_num(align_file_name, pos_kinase_names[p], pos_list[p])[0])
     endpoint_info = extract_endpoints(endpoints_file)
     for t in data_files:
         print t[1]
@@ -36,42 +43,53 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
         act_end = int(kinase_endpoints[len(kinase_endpoints)-1])
         alphac_start = int(kinase_endpoints[len(kinase_endpoints)-6])
         alphac_end = int(kinase_endpoints[len(kinase_endpoints)-5])
-        running_align_num = -1
-        equivalent_pos = -1
-        for j in range(0, len(align_lines)):
-            split_line = align_lines[j].split(" ")
-            if (len(split_line) == 3):
-                if (split_line[0] == "align"):
-                    running_align_num = int(split_line[2][:len(split_line[2])-1])
+        for c in range(0, len(align_num_list)):
+            align_num = align_num_list[c]
+            running_align_num = -1
+            equivalent_pos = -1
+            for j in range(0, len(align_lines)):
+                split_line = align_lines[j].split(" ")
+                if (len(split_line) == 3):
+                    if (split_line[0] == "align"):
+                        running_align_num = int(split_line[2][:len(split_line[2])-1])
+                    else:
+                        if (split_line[0][1:] == kinase_name and running_align_num == align_num):
+                            equivalent_pos = int(split_line[2][:len(split_line[2])-1])
+                            break
+            cat_center_pos = [0.0, 0.0, 0.0]
+            act_mol_center = [0.0, 0.0, 0.0]
+            count_act_mol = 0
+            i = 0
+            while (i < len(pdb_lines)):
+                if ("ATOM" in pdb_lines[i]):
+                    if ((int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= cat_start) and (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= cat_end)):
+                        x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
+                        cat_center_pos = [cat_center_pos[0]+x_value, cat_center_pos[1]+y_value, cat_center_pos[2]+z_value]
+                    elif (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) == equivalent_pos):
+                        x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
+                        act_mol_center[0] += x_value
+                        act_mol_center[1] += y_value
+                        act_mol_center[2] += z_value
+                        count_act_mol += 1
+                i += 1
+            cat_center_pos = np.array(cat_center_pos)/(cat_end-cat_start+1)
+            if (count_act_mol > 0):
+                act_mol_center[0] /= count_act_mol
+                act_mol_center[1] /= count_act_mol
+                act_mol_center[2] /= count_act_mol
+                if (c == 0):
+                    dataset.append([dist_3d(cat_center_pos, act_mol_center)])
                 else:
-                    if (split_line[0][1:] == kinase_name and running_align_num == align_num):
-                        equivalent_pos = int(split_line[2][:len(split_line[2])-1])
-                        break
-        cat_center_pos = [0.0, 0.0, 0.0]
-        act_mol_center = [0.0, 0.0, 0.0]
-        count_act_mol = 0
-        i = 0
-        while (i < len(pdb_lines)):
-            if ("ATOM" in pdb_lines[i]):
-                if ((int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= cat_start) and (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= cat_end)):
-                    x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
-                    y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
-                    z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
-                    cat_center_pos = [cat_center_pos[0]+x_value, cat_center_pos[1]+y_value, cat_center_pos[2]+z_value]
-                elif (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) == equivalent_pos):
-                    x_value = float(pdb_lines[i][POS_X_START:POS_X_END+1])
-                    y_value = float(pdb_lines[i][POS_Y_START:POS_Y_END+1])
-                    z_value = float(pdb_lines[i][POS_Z_START:POS_Z_END+1])
-                    act_mol_center[0] += x_value
-                    act_mol_center[1] += y_value
-                    act_mol_center[2] += z_value
-                    count_act_mol += 1
-            i += 1
-        cat_center_pos = np.array(cat_center_pos)/(cat_end-cat_start+1)
-        if (count_act_mol > 0):
-            act_mol_center[0] /= count_act_mol
-            act_mol_center[1] /= count_act_mol
-            act_mol_center[2] /= count_act_mol
+                    dataset[len(dataset)-1].append(dist_3d(cat_center_pos, act_mol_center))
+            else:
+                if (c == 0):
+                    dataset.append([0])
+                else:
+                    dataset[len(dataset)-1].append(0)
         i = 0
         flag = 0
         flag2 = 0
@@ -110,17 +128,13 @@ def get_data_sets(data_files, endpoints_file, align_file_name):
                     X_alpha.append([x_value, y_value, 1])
                     Z_alpha.append(z_value)
             i += 1
-        dataset.append([sum(min_distances)/len(min_distances)])
+        dataset[len(dataset)-1].append(sum(min_distances)/len(min_distances))
         #dataset.append([np.linalg.norm(cat_field)])
         #dataset[len(dataset)-1].append(np.linalg.norm(cat_field))
-        if (count_act_mol > 0):
-            dataset[len(dataset)-1].append(dist_3d(act_mol_center, cat_center_pos))
-        else:
-            dataset[len(dataset)-1].append(0)
         X = np.array(X)
         Z = np.array(Z)
         least_squares = np.linalg.lstsq(X, Z)
-        dataset[len(dataset)-1].append(np.mean(least_squares[1]))
+        #dataset[len(dataset)-1].append(np.mean(least_squares[1]))
         least_squares_alpha = np.linalg.lstsq(X_alpha, Z_alpha)
         dataset[len(dataset)-1].append(np.mean(least_squares_alpha[1]))
         classifications.append(t[0])
@@ -136,6 +150,8 @@ def kinase_logreg(training, testing, endpoints_file, align_file_name):
     print metrics.classification_report(classifications, training_predictions)
     print metrics.confusion_matrix(classifications, training_predictions)
     print metrics.roc_auc_score(classifications, training_predictions)
+    if (len(testing) == 0):
+        return
     print "Testing set results:"
     [testset, test_classifications] = get_data_sets(testing, endpoints_file, align_file_name)
     testing_predictions = logreg_model.predict(testset)

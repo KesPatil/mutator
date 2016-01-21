@@ -37,7 +37,7 @@ def extract_endpoints(file_name):
             endpoints[line_list[0]].append(line_list[l2])
     return endpoints
 
-def get_training_testing_sets(ac_fn, inac_fn):
+def get_training_testing_sets(ac_fn, inac_fn, flag):
     ac_file = open(ac_fn, "r+")
     inac_file = open(inac_fn, "r+")
     ac_lines = ac_file.readlines()
@@ -45,7 +45,9 @@ def get_training_testing_sets(ac_fn, inac_fn):
     training = []
     testing = []
     for acl in ac_lines:
-        if (len(training) == len(ac_lines)/2):
+        if (flag == 1):
+            training.append([1, acl[:len(acl)-1]])
+        elif (len(training) == len(ac_lines)/2):
             testing.append([1, acl[:len(acl)-1]])
         elif (len(testing) == len(ac_lines)/2):
             training.append([1, acl[:len(acl)-1]])
@@ -54,7 +56,9 @@ def get_training_testing_sets(ac_fn, inac_fn):
         else:
             testing.append([1, acl[:len(acl)-1]])
     for inacl in inac_lines:
-        if (len(training) - len(ac_lines)/2 >= len(inac_lines)/2):
+        if (flag == 1):
+            training.append([0, inacl[:len(inacl)-1]])
+        elif (len(training) - len(ac_lines)/2 >= len(inac_lines)/2):
             print "no"
             testing.append([0, inacl[:len(inacl)-1]])
         elif (len(testing) - len(ac_lines)/2 >= len(inac_lines)/2):
@@ -400,6 +404,24 @@ def averageCorrelations():
     meanSum = float(meanSum)/float(n)
     return [minSum, maxSum, meanSum]
 
+def find_align_num(align_file, kinase_name, pos):
+    align_f = open(align_file, "r+")
+    align_info = align_f.readlines()
+    align_num = -1
+    running_align_num = -1
+    running_align_line = -1
+    for j in range(0, len(align_info)):
+        split_line = align_info[j].split(" ")
+        if (len(split_line) == 3):
+            if (split_line[0] == "align"):
+                running_align_num = int(split_line[2][:len(split_line[2])-1])
+                running_align_line = j
+            else:
+                if (split_line[0][1:] == kinase_name and int(split_line[2][:len(split_line[2])-1]) == pos):
+                    align_num = int(split_line[2][:len(split_line[2])-1])
+                    break
+    return align_num, running_align_line
+
 def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos):
     list_file = open(file_name, "r+")
     list_lines = list_file.readlines()
@@ -428,19 +450,7 @@ def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos
     differences = []
     align_f = open(align_file, "r+")
     align_info = align_f.readlines()
-    align_num = -1
-    running_align_num = -1
-    running_align_line = -1
-    for j in range(0, len(align_info)):
-        split_line = align_info[j].split(" ")
-        if (len(split_line) == 3):
-            if (split_line[0] == "align"):
-                running_align_num = int(split_line[2][:len(split_line[2])-1])
-                running_align_line = j
-            else:
-                if (split_line[0][1:] == kinase_name and int(split_line[2][:len(split_line[2])-1]) == pos):
-                    align_num = int(split_line[2][:len(split_line[2])-1])
-                    break
+    align_num, running_align_line = find_align_num(align_file, kinase_name, pos)
     active_dists = []
     inactive_dists = []
     for k in kinases:
@@ -547,8 +557,139 @@ def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos
     # for d in differences:
         # plt.plot(d, y, 'ro', ms = 15, mfc='r')
     for a in active_dists:
-        plt.plot(a, y, 'ro', ms = 15, alpha=0.1, mfc='r')
+        plt.plot(a, y+0.5, 'ro', ms = 15, alpha=0.1, mfc='r')
     for i in inactive_dists:
-        plt.plot(i, y, 'bo', ms=15, alpha=0.1, mfc='b')
+        plt.plot(i, y-0.5, 'bo', ms=15, alpha=0.1, mfc='b')
     plt.show()
     return differences, active_dists, inactive_dists
+
+def findBestPos(file_name, endpoints_file, align_file, kinase_name):
+    list_file = open(file_name, "r+")
+    list_lines = list_file.readlines()
+    kinases = []
+    endpoint_info = extract_endpoints(endpoints_file)
+    i = 0
+    act_start = int(endpoint_info[kinase_name][len(endpoint_info[kinase_name])-2])
+    act_end = int(endpoint_info[kinase_name][len(endpoint_info[kinase_name])-1])
+    p_values = []
+    for pos in range(act_start, act_end+1):
+        while (i < len(list_lines)-1):
+            line1 = list_lines[i]
+            line2 = list_lines[i+1]
+            line1_elements = line1.split(",")
+            line2_elements = line2.split(",")
+            if (line1_elements[1] == line2_elements[1]):
+                to_add = []
+                if (line1_elements[2] == "yes"):
+                    to_add.append("actives/complete/" + line1_elements[1] + "_active.pdb")
+                else:
+                    to_add.append("actives/incomplete/" + line1_elements[1] + "_active.pdb")
+                if (line2_elements[2] == "yes"):
+                    to_add.append("inactives/complete/" + line2_elements[1] + "_inactive.pdb")
+                else:
+                    to_add.append("inactives/incomplete/" + line2_elements[1] + "_inactive.pdb")
+                kinases.append(to_add)
+                i += 2
+            else:
+                i += 1
+        differences = []
+        align_f = open(align_file, "r+")
+        align_info = align_f.readlines()
+        align_num, running_align_line = find_align_num(align_file, kinase_name, pos)
+        active_dists = []
+        inactive_dists = []
+        for k in kinases:
+            if (not os.path.isfile(k[0])) or (not os.path.isfile(k[1])): 
+                continue
+            active_file = open(k[0], "r+")
+            inactive_file = open(k[1], "r+")
+            active_lines = active_file.readlines()
+            inactive_lines = inactive_file.readlines()
+            k_name = ""
+            if ("incomplete" in k[0]):
+                k_name = k[0][ACTIVE_START_INCOMP:len(k[0])-ACTIVE_END]
+            else:
+                k_name = k[0][ACTIVE_START:len(k[0])-ACTIVE_END]
+            kinase_endpoints = endpoint_info[k_name]
+            cat_start = int(kinase_endpoints[len(kinase_endpoints)-4])
+            cat_end = int(kinase_endpoints[len(kinase_endpoints)-3])
+            i = 0
+            active_dist = 0
+            inactive_dist = 0
+            equivalent_pos = -1
+            act_mol_center = [0.0, 0.0, 0.0]
+            cat_center = [0.0, 0.0, 0.0]
+            count1 = 0
+            count2 = 0
+            for j in range(running_align_line, len(align_info)):
+                split_line = align_info[j].split(" ")
+                if (len(split_line) == 3):
+                    if (split_line[0] != "align"):
+                        if (split_line[0][1:] == k_name):
+                            equivalent_pos = int(split_line[2][:len(split_line[2])-1])
+                            break
+            while (i < len(active_lines)):
+                if ("ATOM" in active_lines[i]):
+                    if (int(active_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) == equivalent_pos):
+                        x_value = float(active_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(active_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(active_lines[i][POS_Z_START:POS_Z_END+1])
+                        act_mol_center[0] += x_value
+                        act_mol_center[1] += y_value
+                        act_mol_center[2] += z_value
+                        count1 += 1
+                    elif (int(active_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= cat_start and int(active_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= cat_end):
+                        x_value = float(active_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(active_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(active_lines[i][POS_Z_START:POS_Z_END+1])
+                        cat_center[0] += x_value
+                        cat_center[1] += y_value
+                        cat_center[2] += z_value
+                        count2 += 1
+                i += 1
+            act_mol_center[0] /= count1
+            act_mol_center[1] /= count1
+            act_mol_center[2] /= count1
+            cat_center[0] /= count2
+            cat_center[1] /= count2
+            cat_center[2] /= count2
+            active_dist = dist_3d(act_mol_center, cat_center)
+            i = 0
+            act_mol_center = [0.0, 0.0, 0.0]
+            cat_center = [0.0, 0.0, 0.0]
+            count1 = 0
+            count2 = 0
+            while (i < len(inactive_lines)):
+                if ("ATOM" in inactive_lines[i]):
+                    if (int(inactive_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1] ) == equivalent_pos):
+                        x_value = float(inactive_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(inactive_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(inactive_lines[i][POS_Z_START:POS_Z_END+1])
+                        act_mol_center[0] += x_value
+                        act_mol_center[1] += y_value
+                        act_mol_center[2] += z_value
+                        count1 += 1
+                    elif (int(inactive_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= cat_start and int(inactive_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= cat_end):
+                        x_value = float(inactive_lines[i][POS_X_START:POS_X_END+1])
+                        y_value = float(inactive_lines[i][POS_Y_START:POS_Y_END+1])
+                        z_value = float(inactive_lines[i][POS_Z_START:POS_Z_END+1])
+                        cat_center[0] += x_value
+                        cat_center[1] += y_value
+                        cat_center[2] += z_value
+                        count2 += 1
+                i += 1
+
+            act_mol_center[0] /= count1
+            act_mol_center[1] /= count1
+            act_mol_center[2] /= count1
+            cat_center[0] /= count2
+            cat_center[1] /= count2
+            cat_center[2] /= count2
+            inactive_dist = dist_3d(act_mol_center, cat_center)
+            active_dists.append(active_dist)
+            inactive_dists.append(inactive_dist)
+            differences.append(inactive_dist-active_dist)
+        p_values.append([pos, spy.ttest_rel(active_dists, inactive_dists)[1]])
+    p_values.sort(key=lambda x:x[1])
+    print p_values
+
