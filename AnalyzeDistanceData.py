@@ -691,5 +691,35 @@ def findBestPos(file_name, endpoints_file, align_file, kinase_name):
             differences.append(inactive_dist-active_dist)
         p_values.append([pos, spy.ttest_rel(active_dists, inactive_dists)[1]])
     p_values.sort(key=lambda x:x[1])
-    print p_values
+    return p_values
 
+def collect_key_kinases(file_name):
+    lines = (open(file_name, "r+")).readlines()
+    l = 1
+    collection = []
+    while l < len(lines)-1:
+        kinase_name = lines[l].split(",")[1]
+        next_kinase_name = lines[l+1].split(",")[1]
+        inc = 1
+        if (kinase_name == next_kinase_name):
+            if ("active" in lines[l] and "inactive" in lines[l+1]):
+                collection.append(kinase_name)
+                inc = 2
+        l += inc
+    return collection
+
+def find_good_align_nums(file_name, endpoints_file, align_file):
+    key_kinases = collect_key_kinases(file_name)
+    align_lines = []
+    for k in key_kinases:
+        print "Iteration " + str(k)
+        print len(align_lines)
+        print align_lines
+        ordered_p_values = findBestPos(file_name, endpoints_file, align_file, k)
+        t = 0
+        while ordered_p_values[t][1] < 0.05:
+            pair = find_align_num(align_file, k, ordered_p_values[t][0])
+            if (pair[1] not in align_lines):
+                align_lines.append(pair[1])
+            t += 1
+    return align_lines
