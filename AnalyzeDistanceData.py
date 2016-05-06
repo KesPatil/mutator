@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import os
+from heapq import *
 
 POS_X_START = 31-1
 POS_X_END = 38-1
@@ -20,12 +21,32 @@ INACTIVE_START = 19
 ACTIVE_END = 11
 INACTIVE_END = 13
 ACTIVE_START_INCOMP = 19
+INACTIVE_START_INCOMP = 21
 AMINO_START = 18-1
 AMINO_END = 20-1
 ATOM_START = 13-1
 ATOM_END = 16-1
 
+# Functions for finding the array of minimums, array of maximums, and array of means of all rows in a 2-D array
+def min_array(array_2d):
+    mins = []
+    for a in array_2d:
+        mins.append(min(a))
+    return mins
 
+def max_array(array_2d):
+    maxs = []
+    for a in array_2d:
+        maxs.append(max(a))
+    return maxs
+
+def mean_array(array_2d):
+    means = []
+    for a in array_2d:
+        means.append(sum(a)/len(a))
+    return means
+
+# Give the name of a file containing information about kinases (e.g. residue numbers for the activation loop, catalytic loop, nucleotide-binding loop, and alpha-c helix), return a dictionary with the name of the kinase as the key and the values of interest
 def extract_endpoints(file_name):
     start_end_file = open(file_name, "r+")
     start_end_lines = start_end_file.readlines()
@@ -37,6 +58,7 @@ def extract_endpoints(file_name):
             endpoints[line_list[0]].append(line_list[l2])
     return endpoints
 
+# Divide all available data (contained within two files with file names ac_fn and inac_fn) randomly into a training and a testing set, where the proportion of the data (where the size of the data is measured by the smaller of the active and inactive datasets) that is put into the training set is set by a parameter within the function. The flag variable indicates whether all the data should be put into the training set (flag=1) or not (flag=0).
 def get_training_testing_sets(ac_fn, inac_fn, flag):
     ac_file = open(ac_fn, "r+")
     inac_file = open(inac_fn, "r+")
@@ -44,32 +66,40 @@ def get_training_testing_sets(ac_fn, inac_fn, flag):
     inac_lines = inac_file.readlines()
     training = []
     testing = []
-    for acl in ac_lines:
-        if (flag == 1):
+    proportion = 0.5
+    if (flag == 1):
+        for acl in ac_lines:
             training.append([1, acl[:len(acl)-1]])
-        elif (len(training) == len(ac_lines)/2):
-            testing.append([1, acl[:len(acl)-1]])
-        elif (len(testing) == len(ac_lines)/2):
-            training.append([1, acl[:len(acl)-1]])
-        elif (random.random() < 0.5):
-            training.append([1, acl[:len(acl)-1]])
-        else:
-            testing.append([1, acl[:len(acl)-1]])
-    for inacl in inac_lines:
-        if (flag == 1):
+        for inacl in inac_lines:
             training.append([0, inacl[:len(inacl)-1]])
-        elif (len(training) - len(ac_lines)/2 >= len(inac_lines)/2):
-            print "no"
-            testing.append([0, inacl[:len(inacl)-1]])
-        elif (len(testing) - len(ac_lines)/2 >= len(inac_lines)/2):
-            training.append([0, inacl[:len(inacl)-1]])
-        elif (random.random() < 0.5):
-            training.append([0, inacl[:len(inacl)-1]])
-        else:
-            print "no"
-            testing.append([0, inacl[:len(inacl)-1]])
+    else:
+        train_count = int(min(len(ac_lines), len(inac_lines))*proportion)
+        act_trains = []
+        inact_trains = []
+        for i in range(train_count):
+            num = random.randint(0, len(ac_lines)-1)
+            while (num in act_trains):
+                num = random.randint(0, len(ac_lines)-1)
+            act_trains.append(num)
+            num = random.randint(0, len(inac_lines)-1)
+            while (num in inact_trains):
+                num = random.randint(0, len(inac_lines)-1)
+            inact_trains.append(num)
+        for j in range(0, len(ac_lines)):
+            if (j in act_trains):
+                training.append([1, ac_lines[j][:len(ac_lines[j])-1]])
+            else:
+                testing.append([1, ac_lines[j][:len(ac_lines[j])-1]])
+        for k in range(0, len(inac_lines)):
+            if (k in inact_trains):
+                training.append([0, inac_lines[k][:len(inac_lines[k])-1]])
+            else:
+                testing.append([0, inac_lines[k][:len(inac_lines[k])-1]])
+    print str(len(ac_lines)) + ", " + str(len(inac_lines))
+    print str(len(training)) + ", " + str(len(testing))
     return [training, testing]
 
+# Tokenize a line in a pdb file
 def pdb_tokenize(pdb_line):
     words =[]
     curr_word = pdb_line[0]
@@ -83,9 +113,11 @@ def pdb_tokenize(pdb_line):
         words.append(curr_word[:len(curr_word)-1])
     return words
 
+# Given two lists/tuples/etc. that represent two points in 3-space, return the Euclidean distance between the two points
 def dist_3d(xyz1, xyz2):
     return math.sqrt((xyz1[0]-xyz2[0])**2 + (xyz1[1]-xyz2[1])**2 + (xyz1[2]-xyz2[2])**2)
 
+# Given a list of the lines in a pdb (pdb_lines), the index of the line in the pdb that corresponds to a particular atom (single), the starting and ending residue numbers for a specific region in the kinase such as the catalytic loop (list_start and list_end), and the index of the line in the pdb to start searching for the residues in that region (index)
 def dist_list(pdb_lines, single, index, list_start, list_end):
     single_x = float(pdb_lines[single][POS_X_START:POS_X_END+1])
     single_y = float(pdb_lines[single][POS_Y_START:POS_Y_END+1])
@@ -103,6 +135,27 @@ def dist_list(pdb_lines, single, index, list_start, list_end):
         j += 1
     return d_list
 
+# Find all pairwise distances between 'CA' atoms in two different regions such as the activation and catalytic loops. Given the name of the kinase (kinase_name), a list of the lines in the pdb (pdb_lines), a list/tuple of the starting and ending residue numbers for the first region (region1), and a list/tuple of the starting and ending residue numbers for the second region (region2), return a 2-D array.
+def two_region_distances(kinase_name, pdb_lines, region1, region2):
+    reg1_start = region1[0]
+    reg1_end = region1[1]
+    reg2_start = region2[0]
+    reg2_end = region2[1]
+    i = 0
+    ind = -1
+    distances = []
+    while (i < len(pdb_lines)):
+        if ("ATOM" in pdb_lines[i]):
+            if (ind == -1):
+                ind = i
+            if (int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) >= reg1_start and int(pdb_lines[i][RESIDUE_NUM_START:RESIDUE_NUM_END+1]) <= reg1_end):
+                if (pdb_lines[i][ATOM_START:ATOM_END+1].strip(' ') == "CA"):
+                    the_dist_list = dist_list(pdb_lines, i, ind, reg2_start, reg2_end)
+                    distances.append(the_dist_list)
+        i += 1
+    return distances
+
+# Compute the minimum distance between any atom in the activation loop and any atom in the catalytic loop. This function returns the correlation between that quantity (in addition to correlations for the max-minimum distance and the mean-minimum distance) and whether a kinase is active and inactive given a list of kinases (training). Should use two_region_distances() with min_array() instead of this function.
 def min_act_cat_dist(training, endpoints_file):
     min_active_list = []
     min_inactive_list = []
@@ -178,6 +231,7 @@ def min_act_cat_dist(training, endpoints_file):
     #return [active_list, inactive_list]
     return [spy.pearsonr(classifications, min_datasets)[0], spy.pearsonr(classifications, max_datasets)[0], spy.pearsonr(classifications, mean_datasets)[0]]
 
+# Given a list of lines in a pdb and an index of a line in the pdb, return a pair (i.e. a list of size 2) where the first element is the name of the next amino acid after the given index and the second element is the index where this next amino acid begins.
 def find_next_amino(pdb_lines, currIndex):
     if ("ATOM" not in pdb_lines[currIndex]):
         return ["", -1]
@@ -186,6 +240,7 @@ def find_next_amino(pdb_lines, currIndex):
         currIndex += 1
     return [pdb_lines[currIndex][AMINO_START:AMINO_END+1], currIndex]
 
+# Compute the distance between the atoms in the DFG residue (in the activation loop) and the atoms in the catalytic loop for several active and inactive residues. Return three correlations between whether or not a kinase is active and 1) minimum distance, 2) maximum distance, and 3) mean distance.
 def avg_dfg_dist(training, endpoints_file):
     min_active_list = []
     max_active_list = []
@@ -266,6 +321,7 @@ def avg_dfg_dist(training, endpoints_file):
         mean_datasets.append(mean_inactive_list[ina])
     return [spy.pearsonr(classifications, min_datasets)[0], spy.pearsonr(classifications, max_datasets)[0], spy.pearsonr(classifications, mean_datasets)[0]]
 
+# A crude measure of the degree to which a set of points in 3-space can be modeled by a plane. Computes the least-squares plane for the points and the residuals for the fit. Returns the correlation between the mean residual and whether a kinase is active or inactive
 def planar_similarity(training, endpoints_file):
     active_list = []
     inactive_list = []
@@ -313,16 +369,19 @@ def planar_similarity(training, endpoints_file):
         classifications.append(t[0])
     return spy.pearsonr(dataset, classifications)[0]
 
+# Compute the electric field at a position due to a charge given the positions of the charge and the position of interest and the value of the charge by Coulomb's Law.
 def electric_field(pos1, charge2, pos2):
     r_vec = pos2 - pos1
     mult_constant = 1.0/(4*scipy.constants.pi*scipy.constants.epsilon_0)
     return mult_constant*charge2*r_vec/(np.linalg.norm(r_vec)**3)
 
+# Compute the electric potential at a position due to a charge given the positions of the charge and the location of interest and the value of the charge by Coulomb's Law
 def electric_potential(pos1, charge2, pos2):
     r_vec = pos2-pos1
     mult_constant = 1.0/(4*scipy.constants.pi*scipy.constants.epsilon_0)
     return mult_constant*charge2/np.linalg.norm(r_vec)
 
+# Compute correlations between whether a kinase is active or inactive and a rough estimate of the contribution to the electric field at the center of the catalytic loop due to the atoms in the activation loop.
 def act_cat_field(training, endpoints_file):
     dataset_field = []
     dataset_potential = []
@@ -388,6 +447,7 @@ def act_cat_field(training, endpoints_file):
         classifications.append(t[0])
     return [spy.pearsonr(dataset_field, classifications)[0], spy.pearsonr(dataset_potential, classifications)[0]]
 
+# Find the average correlation computed by min_act_cat_dist() over n trials.
 def averageCorrelations():
     minSum = 0
     maxSum = 0
@@ -404,6 +464,7 @@ def averageCorrelations():
     meanSum = float(meanSum)/float(n)
     return [minSum, maxSum, meanSum]
 
+# For a given position (pos) in a given kinase (kinase_name), the function returns the align number associated with that residue.
 def find_align_num(align_file, kinase_name, pos):
     align_f = open(align_file, "r+")
     align_info = align_f.readlines()
@@ -563,6 +624,7 @@ def findSpecificDistance(file_name, endpoints_file, align_file, kinase_name, pos
     plt.show()
     return differences, active_dists, inactive_dists
 
+# Given a kinase for which PDBs for the active and inactive form exist within actives/complete/ and inactives/complete/, for each residue in the activation loop calculate the distance between that residue and the center of the catalytic loop for both the active and inactive states for all kinases listed in a file whose name is file_name. Compute p-values for a matched pairs test of the distances between the activation loop and the catalytic loop in the active and inactive states.
 def findBestPos(file_name, endpoints_file, align_file, kinase_name):
     list_file = open(file_name, "r+")
     list_lines = list_file.readlines()
@@ -693,6 +755,7 @@ def findBestPos(file_name, endpoints_file, align_file, kinase_name):
     p_values.sort(key=lambda x:x[1])
     return p_values
 
+# Given the name of a file that contains a list of kinases for which both active and inactive PDBs are available, return a list of the names of all of these kinases.
 def collect_key_kinases(file_name):
     lines = (open(file_name, "r+")).readlines()
     l = 1
@@ -708,6 +771,7 @@ def collect_key_kinases(file_name):
         l += inc
     return collection
 
+# Call the findBestPos() function for several different kinases (for which both active and inactive PDBs are available)
 def find_good_align_nums(file_name, endpoints_file, align_file):
     key_kinases = collect_key_kinases(file_name)
     align_lines = []
@@ -723,3 +787,48 @@ def find_good_align_nums(file_name, endpoints_file, align_file):
                 align_lines.append(pair[1])
             t += 1
     return align_lines
+
+# Compute a list whose size is final_size that contains those residues that are shared by the highest number of kinases at the same align numbers
+def most_common_residues(align_file, final_size):
+    align_lines = (open(align_file, "r+")).readlines()
+    residue_pq = []
+    heap_size = 0
+    residue_dict = {}
+    running_align_num = 0
+    for l in range(0, len(align_lines)):
+        if ("align" in align_lines[l]):
+            for k in residue_dict.keys():
+                if (heap_size < final_size):
+                    heappush(residue_pq, (residue_dict[k], (k, running_align_num)))
+                    heap_size += 1
+                elif (residue_dict[k] > residue_pq[0][0]):
+                    heappop(residue_pq)
+                    heappush(residue_pq, (residue_dict[k], (k, running_align_num)))
+            running_align_num = int(align_lines[l].split(" ")[2])
+            residue_dict = {}
+        else:
+            line_str = align_lines[l].split(" ")
+            residue_label = line_str[1]
+            if (residue_label in residue_dict.keys()):
+                residue_dict[residue_label] += 1
+            else:
+                residue_dict[residue_label] = 1
+    output = []
+    while (len(residue_pq) > 0):
+        pq_element = heappop(residue_pq)
+        output.append(pq_element)
+    return output
+
+# Given a residue, a kinase_name, an align_number, and a file with information about align_number, compute the number of the residue associated with that number within the given kinase or -1 if that kinase does not have the given residue at the specified align_number
+def find_residue_num(align_file, align_num, residue, kinase_name):
+    align_lines = (open(align_file, "r+")).readlines()
+    running_align_num = 0
+    for l in range(0, len(align_lines)):
+        if ("align" in align_lines[l]):
+            running_align_num = int(align_lines[l].split(" ")[2])
+            if (running_align_num > align_num):
+                break
+        elif (running_align_num == align_num):
+            if (align_lines[l].split(" ")[0][1:] == kinase_name and align_lines[l].split(" ")[1] == residue):
+                return int(align_lines[l].split(" ")[2])
+    return -1

@@ -5,6 +5,8 @@ surface_areas = {"A": 67, "R": 196, "N": 113, "D": 106, "C": 104, "Q": 144, "E":
 volumes = {"A": 67, "R": 148, "N": 96, "D": 91, "C": 86, "Q": 114, "E": 109, "G": 48, "H": 118, "I": 124, "L": 124, "K": 135, "M": 124, "F": 135, "P": 90, "S": 73, "T": 93, "W": 163, "Y": 141, "V": 105}
 polarities = {"A": 8.1, "K": 11.3, "D": 13.0, "P": 8.0, "E": 12.3, "W": 5.4, "I": 5.2, "L": 4.1, "N": 11.6, "F": 5.2, "Q": 10.5, "T": 8.6, "H": 10.4, "V": 5.9, "R": 10.5, "M": 5.7, "C": 5.5, "S": 9.2, "G": 9.0, "Y": 6.2}
 significant_residues = [70518, 74845, 74572, 70059, 73367, 74426, 71862, 74278, 72249, 74713, 73955, 76274, 75279, 75844, 74142]
+utilized_residues = [70518, 74572, 70059, 72249, 73955, 75279, 75844]
+utilized_residues2 = [73367, 72249, 74713]
 
 def compute_sphericity(amino):
     return float(np.pi*((6*float(volumes[amino]))**(2.0/3))/float(surface_areas[amino]))
@@ -87,3 +89,40 @@ def compute_correlations(filename, align_file_name):
         features.append(residue_flags[f])
     features.append(significant)
     return np.corrcoef(features)
+
+def get_dataset(filename, align_file_name):
+    classifications = []
+    dataset = []
+    datafile = open(filename, "r+")
+    datalines = datafile.readlines()
+    for i in range(0, len(datalines)):
+        data = []
+        line = datalines[i].split(" ")
+        kinase = line[0]
+        wild_type = line[1]
+        res_num = int(line[2])
+        mut_type = line[3]
+        category = int(line[4])
+        classifications.append(max(0, category))
+        align_file_line_num = find_align_num(align_file_name, kinase, res_num)[1]
+        residue_flag = 1 if align_file_line_num in utilized_residues else 0
+        pol_diff = polarities[mut_type]-polarities[wild_type]
+        spher_diff = 0
+        if (surface_areas[mut_type] != 0 and surface_areas[wild_type] != 0):
+            spher_diff = compute_sphericity(mut_type)-compute_sphericity(wild_type)
+        data.append(residue_flag)
+        data.append(pol_diff)
+        data.append(spher_diff)
+        dataset.append(np.array(data))
+    return [dataset, classifications]
+
+def logreg_mutations(filename, align_file_name):
+    [dataset, classifications] = get_dataset(filename, align_file_name)
+    logreg_model = LogisticRegression()
+    logreg_model.fit(dataset, classifications)
+    predictions = logreg_model.predict(dataset)
+    print "Results on the dataset:"
+    print metrics.classification_report(classifications, predictions)
+    print metrics.confusion_matrix(classifications, predictions)
+    print metrics.roc_auc_score(classifications, predictions)
+    return [logreg_model.coef_, logreg_model.intercept_]
